@@ -1,0 +1,182 @@
+// file: stock-trader.js
+
+// requires 4s Market Data TIX API Access
+
+const commission = 100000;
+
+export async function main(ns) {
+    ns.disableLog("ALL");
+
+    while (true) {
+        tendStocks(ns);
+        await ns.sleep(5 * 1000);
+    }
+}
+
+function tendStocks(ns) {
+    ns.print("");
+    var stocks = getAllStocks(ns);
+
+    stocks.sort((a, b) => b.profitPotential - a.profitPotential);
+
+    var longStocks = new Set();
+    var shortStocks = new Set();
+
+    for (const stock of stocks) {
+        if (stock.longShares > 0) {
+            if (stock.forecast > 0.5) {
+                longStocks.add(stock.sym);
+                ns.print(`INFO ${stock.summary} LONG ${ns.nFormat(stock.value, "0a")} ${ns.nFormat(100 * stock.profit / stock.value, "0.00")}%`);
+            }
+            else {
+                const salePrice = ns.stock.sell(stock.sym, stock.longShares);
+                const saleTotal = salePrice * stock.longShares;
+                const saleCost = stock.longPrice * stock.longShares;
+                const saleProfit = saleTotal - saleCost - commission;
+                stock.shares = 0;
+                shortStocks.add(stock.sym);
+                ns.print(`WARN ${stock.summary} SOLD for ${ns.nFormat(saleProfit, "$0.0a")} profit`);
+            }
+        }
+        if (stock.shortShares > 0) {
+            if (stock.forecast < 0.5) {
+                shortStocks.add(stock.sym);
+                ns.print(`INFO ${stock.summary} SHORT ${format(stock.value)} ${ns.nFormat(-100 * stock.profit / stock.value, "0.00")}%`);
+            }
+            else {
+                const salePrice = ns.stock.sellShort(stock.sym, stock.shortShares);
+                const saleTotal = salePrice * stock.shortShares;
+                const saleCost = stock.shortPrice * stock.shortShares;
+                const saleProfit = saleTotal - saleCost - commission;
+                stock.shares = 0;
+                longStocks.add(stock.sym);
+                ns.print(`WARN ${stock.summary} SHORT SOLD for ${ns.nFormat(saleProfit, "$0.0a")} profit`);
+            }
+        }
+    }
+
+    for (const stock of stocks) {
+        var money = ns.getPlayer().money;
+        //ns.print(`INFO ${stock.summary}`);
+        if (stock.forecast > 0.57) {
+            longStocks.add(stock.sym);
+            //ns.print(`INFO ${stock.summary}`);
+            if (money > 100 * commission) {
+                const sharesToBuy = Math.min(stock.maxShares, Math.floor((money - commission) / stock.askPrice));
+                if (ns.stock.buy(stock.sym, sharesToBuy) > 0) {
+                    ns.print(`WARN ${stock.summary} LONG BOUGHT ${ns.nFormat(sharesToBuy, "$0.0a")}`);
+                }
+            }
+        }
+        else if (stock.forecast < 0.43) {
+            shortStocks.add(stock.sym);
+            //ns.print(`INFO ${stock.summary}`);
+            if (money > 100 * commission) {
+                const sharesToBuy = Math.min(stock.maxShares, Math.floor((money - commission) / stock.bidPrice));
+                if (ns.stock.short(stock.sym, sharesToBuy) > 0) {
+                    ns.print(`WARN ${stock.summary} SHORT BOUGHT ${ns.nFormat(sharesToBuy, "$0.0a")}`);
+                }
+            }
+        }
+    }
+
+    // send stock market manipulation orders to hack manager
+    var growStockPort = ns.getPortHandle(1); // port 1 is grow
+    var hackStockPort = ns.getPortHandle(2); // port 2 is hack
+    if (growStockPort.empty() && hackStockPort.empty()) {
+        // only write to ports if empty
+        for (const sym of longStocks) {
+            //ns.print("INFO grow " + sym);
+            growStockPort.write(getSymServer(sym));
+        }
+        for (const sym of shortStocks) {
+            //ns.print("INFO hack " + sym);
+            hackStockPort.write(getSymServer(sym));
+        }
+    }
+}
+
+function getAllStocks(ns) {
+    // make a lookup table of all stocks and all their properties
+    const stockSymbols = ns.stock.getSymbols();
+    const stocks = [];
+    for (const sym of stockSymbols) {
+
+        const pos = ns.stock.getPosition(sym);
+        const stock = {
+            sym: sym,
+            longShares: pos[0],
+            longPrice: pos[1],
+            shortShares: pos[2],
+            shortPrice: pos[3],
+            forecast: ns.stock.getForecast(sym),
+            volatility: ns.stock.getVolatility(sym),
+            askPrice: ns.stock.getAskPrice(sym),
+            bidPrice: ns.stock.getBidPrice(sym),
+            maxShares: ns.stock.getMaxShares(sym),
+        };
+        stock.value = (stock.longShares * stock.bidPrice) + (stock.shortShares * stock.askPrice);
+        stock.initialValue = (stock.longShares * stock.longPrice) + (stock.shortShares * stock.shortPrice);
+        stock.profit = stock.value - stock.initialValue - commission;
+        var profitPotential = 2 * Math.abs(stock.forecast - 0.5);
+
+        profitPotential *= (stock.volatility / 8);
+        stock.profitPotential = profitPotential;
+        stock.summary = `${stock.sym}: ${stock.forecast.toFixed(3)} ± ${stock.volatility.toFixed(3)}`;
+        stocks.push(stock);
+    }
+    return stocks;
+}
+
+function format(money) {
+    const prefixes = ["", "k", "m", "b", "t", "q"];
+    for (let i = 0; i < prefixes.length; i++) {
+        if (Math.abs(money) < 1000) {
+            return `${Math.floor(money * 10) / 10}${prefixes[i]}`;
+        } else {
+            money /= 1000;
+        }
+    }
+    return `${Math.floor(money * 10) / 10}${prefixes[prefixes.length - 1]}`;
+}
+
+function getSymServer(sym) {
+    const symServer = {
+        "WDS": "",
+        "ECP": "ecorp",
+        "MGCP": "megacorp",
+        "BLD": "blade",
+        "CLRK": "clarkinc",
+        "OMTK": "omnitek",
+        "FSIG": "4sigma",
+        "KGI": "kuai-gong",
+        "DCOMM": "defcomm",
+        "VITA": "vitalife",
+        "ICRS": "icarus",
+        "UNV": "univ-energy",
+        "AERO": "aerocorp",
+        "SLRS": "solaris",
+        "GPH": "global-pharm",
+        "NVMD": "nova-med",
+        "LXO": "lexo-corp",
+        "RHOC": "rho-construction",
+        "APHE": "alpha-ent",
+        "SYSC": "syscore",
+        "CTK": "comptek",
+        "NTLK": "netlink",
+        "OMGA": "omega-net",
+        "JGN": "joesguns",
+        "SGC": "sigma-cosmetics",
+        "CTYS": "catalyst",
+        "MDYN": "microdyne",
+        "TITN": "titan-labs",
+        "FLCM": "fulcrumtech",
+        "STM": "stormtech",
+        "HLS": "helios",
+        "OMN": "omnia",
+        "FNS": "foodnstuff"
+    }
+
+    return symServer[sym];
+
+}

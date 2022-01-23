@@ -1,35 +1,33 @@
-// hack severs for this much of their money initially
-// hack servers never for more than this much of their money
-// values above 0.9 do not have a big impact on money (potentially negative if near max RAM usage)
-// values above 0.9 are mainly to increase RAM usage in order to get hacking skill faster late-game
-// the money ratio is increased automatically, starting with this value
+// file: distributed-hack.js
+
+// Detailed explanation at the end of the file.
+
+// hack severs for this much of their money
+// the money ratio is increased and decreased automatically, starting with this value initially
 var hackMoneyRatio = 0.1;
 
-// the maximum numberof parallel attacks against one server
-// low numbers might be inefficient late-game, high numbers might be inefficient early-game
-// reason is that parallel attacks are not as memory-efficient as single or partial attacks
-// the purpose of parallel attacks is to use free RAM when we can attack all servers simultaneously
-// to attack single servers simultaneously. Parallel attacks need hack threads that wait for a considerable amount of time
-// thus blocking free RAM longer that could be used for other attacks.
+// the maximum numberof parallel burst attacks against one server
 // the value of this variable should not make a big difference however
 var maxParallelAttacks = 50;
 
-// time to wait before checking and calculating new attacks in ms 
+// time to wait between checking and calculating new attacks (in ms) 
 const waitTimeBetweenManagementCycles = 1000;
 
-
-// time difference between finishing [ hack - grow - weaken ] in burst attacks
+// time difference between finishing [ hack - grow - weaken ] in burst attacks (in ms)
 const timeDiff = 200;
 
-// time between burst attacks. Needs to be bigger than 3 * time diff
+// time between burst attacks. Needs to be bigger than 2 * time diff (in ms)
 const timeBetweenAttacks = 500;
 
-// Known issue with parallel attacks: 
-// Hacking skill might increase after launching them while they wait before they start. 
-// That can get parallel attacks out of sync and decrease efficiency.
+// Potential issue with burst attack timing: 
+// Hacking skill might increase after launching them while hack / grow wait before they start. 
+// Execution time is calculated when launching the attack but can decrease with higher hacking skill.
+// Thus fast growing hacking skill can get burst attacks out of sync. In such situations it's steamrolling mode anyways, so who cares...
+// Higher time diff / between attacks reduce this issue plus reduce the load on the real CPU running the game
 
 // RAM requirement of the slave scripts for weak, grow & hack
-// actually it's 1.7 for hack and 1.75 for weak & grow. Let's always use 1.75 for simpicity.
+// actually it's 1.7 for hack and 1.75 for weak & grow. Let's always use 1.75 for simpicity
+// hard-coded to save RAM by not having to get ram via ns function
 const slaveScriptRam = 1.75;
 
 // names of the slave scripts
@@ -40,27 +38,33 @@ const hackScriptName = "hack.js";
 // list of slave script files
 const files = [weakenScriptName, growScriptName, hackScriptName];
 
+// Backdoor script hooked in (requires singluarity functions SF4.1)
 const backdoorScript = "backdoor.js"
-const backdoorScriptRam = 5.8;
-// automatically backdoor these servers. Requires singularity functions.
-var backdoorServers = new Set(["CSEC", "I.I.I.I", "avmnite-02h", "run4theh111z"]);
+const backdoorScriptRam = 65.8;
 
+// Solve Contract Script hooked in 
 const solveContractsScript = "solve-contracts.js";
 const solveContractsScriptRam = 22;
 
 // global variable to track ongoing partial weak or grow attacks
 var partialWeakGrow = null; // do not change this
 
-// global variable to track recent partial attacks
+// global variable to track amount of recent partial attacks
 var partialAttacks = 1;
 
+// hard-coded values to save RAM by not using ns functions ...AnalyzeSecurity()
 const growThreadSecurityIncrease = 0.004;
 const hackThreadSecurityIncrease = 0.002;
+
 
 /** @param {NS} ns **/
 export async function main(ns) {
     // Disable default Logging
     ns.disableLog("ALL");
+
+    // automatically backdoor these servers. Requires singularity functions.
+    var backdoorServers = new Set(["CSEC", "I.I.I.I", "avmnite-02h", "run4theh111z"]);
+
     var servers;
     var targets;
     var freeRams;
@@ -86,14 +90,18 @@ export async function main(ns) {
     }
     ns.print("INFO initial hack money ratio: " + hackMoneyRatio);
 
+    var growStocks = new Set();
+    var hackStocks = new Set();
+
     while (true) {
-        // scan and hack all accesible servers
-        servers = await scanAndHack(ns);
+        // scan and nuke all accesible servers
+        servers = await scanAndNuke(ns);
         // ns.tprint(`servers:${[...servers.values()]}`)
 
         for (var server of servers) {
-            // transfer file to server
+            // transfer files to the servers
             await ns.scp(files, "home", server);
+            // ToDo: Not efficient to loop through all servers always. Could be optimized to track which server was optimized and scp only once.
 
             // backdoor faction servers automatically
             // requires singularity module
@@ -106,27 +114,30 @@ export async function main(ns) {
                         if (homeFreeRam >= backdoorScriptRam) {
                             const backdoorSuccess = ns.exec(backdoorScript, "home", 1, server);
                             ns.print("INFO backdoor on " + server + " - " + backdoorSuccess);
-                            if (backdoorSuccess) {
-                                backdoorServers.delete(backdoorServer);
-                            }
+                            backdoorServers.delete(backdoorServer);
                         }
                     }
                 }
             }
         }
 
-        // find servers with free RAM and calculate free RAM for each plus overall max RAM
+        // find servers with free RAM and calculate free RAM for each plus overall available RAM
         freeRams = getFreeRam(ns, servers);
         //ns.tprint(`freeRams:${freeRams.map(value => JSON.stringify(value))}`)
 
-        // find servers that we can hack
+        // filter servers for those which we can hack and sort them
         targets = getHackable(ns, servers);
         //ns.tprint(`targets:${[...targets.values()]}`)
 
-        // Main logic sits here, determine whether or not and how many threads we should call weaken, grow and hack  
-        manageAndHack(ns, freeRams, servers, targets);
+        // update servers for stock market manipulation
+        growStocks = getStockPortContent(ns, 1, growStocks); // port 1 is grow
+        hackStocks = getStockPortContent(ns, 2, hackStocks); // port 2 is hack
 
-        ramUsage = (freeRams[2] - freeRams[1]) / freeRams[2];
+        // Main logic sits here, determine whether or not and how many threads we should call weaken, grow and hack  
+        manageAndHack(ns, freeRams, servers, targets, growStocks, hackStocks);
+
+        // Adjust hackMoneyRatio
+        ramUsage = (freeRams.overallMaxRam - freeRams.overallFreeRam) / freeRams.overallMaxRam;
         if (partialAttacks == 0 && ramUsage < 0.9 && hackMoneyRatio < 0.99) {
             hackMoneyRatio += (1 - hackMoneyRatio) * (1 - ramUsage);
             if (hackMoneyRatio > 0.99) {
@@ -141,7 +152,11 @@ export async function main(ns) {
             }
             ns.print("INFO decrease hack money ratio to: " + hackMoneyRatio);
         }
+        // ToDo: HackMoneyRatio adjustment is always executed, even if no attack is launched. Can lead to one situation being evaluated and acted upon multiple times
+        // even if the situation did not change. Intended: Only changed situations shall be re-interpreted. Introduce tracking variable to only evaluate
+        // if an attack was launched
 
+        // Hook in solce contracts script here if enough RAM is free.
         const homeMaxRam = ns.getServerMaxRam("home");
         const homeUsedRam = ns.getServerUsedRam("home")
         const homeFreeRam = homeMaxRam - homeUsedRam;
@@ -151,19 +166,18 @@ export async function main(ns) {
         }
 
         // if lots of RAM to spare and money is not an issue, spam weak attacks for hacking XP gain
-        if (ramUsage < 0.9 && hackMoneyRatio >= 0.99) {
+        if (ramUsage < 0.8 && hackMoneyRatio >= 0.99) {
             xpWeaken(ns, freeRams, servers, targets);
-            ramUsage = (freeRams[2] - freeRams[1]) / freeRams[2];
+            ramUsage = (freeRams.overallMaxRam - freeRams.overallFreeRam) / freeRams.overallMaxRam;
         }
 
-        ns.print("INFO RAM utilization: " + Math.round(ramUsage * 100) + " % ");
+        //ns.print("INFO RAM utilization: " + Math.round(ramUsage * 100) + " % ");
 
         await ns.sleep(waitTimeBetweenManagementCycles);
     }
 }
 
-
-function manageAndHack(ns, freeRams, servers, targets) {
+function manageAndHack(ns, freeRams, servers, targets, growStocks, hackStocks) {
     for (let target of targets) {
         // check if there is already an attack against this target ongoing
         if (attackOngoing(ns, servers, target) == true) {
@@ -176,7 +190,7 @@ function manageAndHack(ns, freeRams, servers, targets) {
         const sec = ns.getServerSecurityLevel(target);
         var addedGrowSecurity = 0;
         var addedHackSecurity = 0;
-        const money = ns.getServerMoneyAvailable(target);
+        var money = ns.getServerMoneyAvailable(target);
         const maxMoney = ns.getServerMaxMoney(target);
         var weakThreads = 0;
         var growThreads = 0;
@@ -184,8 +198,14 @@ function manageAndHack(ns, freeRams, servers, targets) {
 
         var secDiff = sec - minSec
 
-        if (secDiff < 0.5) {  // else, first only weaken if the security of the host is not at its minimum
-            // server is near min security
+        if (secDiff < 0.5) {
+            // server is near min security. Go ahead with grow or hack.
+
+            if (money < 1) {
+                // ensure money > 0 to prevent division by zero or hackAnalyze zero
+                // just in case a server was 100% hacked with no money left
+                money = 1;
+            }
             var initialGrowRatio = maxMoney / money;
             var hackReGrowRatio = 1;
             var overallGrowRatio = 1;
@@ -205,11 +225,13 @@ function manageAndHack(ns, freeRams, servers, targets) {
                 addedHackSecurity = hackThreads * hackThreadSecurityIncrease;
             }
 
-            //multiply the initial grow ratio by the expected new grow ratio needed after hack
+            // grow what was missing before and what we expect to hack
+            // multiply the initial grow ratio by the expected new grow ratio needed after hack
             overallGrowRatio = initialGrowRatio * hackReGrowRatio;
 
-            // considering 0 cores on all serers. 
-            // The last parameter 0 can be removed if optimizing for running on home server with > 0 cores only
+            // Considering 0 cores on all serers. 
+            // The last parameter 0 can be removed if optimizing for running slave threads on home server with > 0 cores only
+            // else, grow threads onother servers than home will not grow sufficiently and break perfect attack chains
             growThreads = Math.ceil((ns.growthAnalyze(target, overallGrowRatio, 0)));
 
             addedGrowSecurity = growThreads * growThreadSecurityIncrease;
@@ -225,7 +247,7 @@ function manageAndHack(ns, freeRams, servers, targets) {
         var growTime = 0;
         var hackTime = 0;
         var parallelAttacks = 1;
-        if (overallRamNeed > freeRams[1]) {
+        if (overallRamNeed > freeRams.overallFreeRam) {
             // only attack if there is no other partial attack ongoing or if we want to hack.
             // this is to spend RAM on hacking, while not initially weakening and growing servers we would not hack yet anyways
             // early money is useful for server purchases to speed up RAM gain 
@@ -236,7 +258,7 @@ function manageAndHack(ns, freeRams, servers, targets) {
                 partialAttacks++;
             }
 
-            const maxPercentage = freeRams[1] / overallRamNeed;
+            const maxPercentage = freeRams.overallFreeRam / overallRamNeed;
             if (partialWeakGrow == null || partialWeakGrow == target || hackThreads > 0) {
                 if (hackThreads > 0) {
                     if (maxPercentage < 0.05) {
@@ -278,7 +300,7 @@ function manageAndHack(ns, freeRams, servers, targets) {
                         // if we ran a partial weak/grow before and could do a full one now, reset partial attack
                         partialWeakGrow = null;
                     }
-                    ns.print("INFO " + maxPercentage.toFixed(1) + " attack on " + target + " with " + weakThreads + " | " + growThreads + " | " + hackThreads);
+                    ns.print("INFO " + maxPercentage.toFixed(1) + " HGW " + target + " " + weakThreads + " | " + growThreads + " | " + hackThreads);
                 }
                 else { //hackthreads == 0
                     growThreads = Math.floor(growThreads * maxPercentage);
@@ -291,7 +313,7 @@ function manageAndHack(ns, freeRams, servers, targets) {
                     }
                     // we have only enough RAM to partially grow this target
                     partialWeakGrow = target;
-                    ns.print("INFO " + maxPercentage.toFixed(1) + " weak/grow on " + target + " with " + weakThreads + " | " + growThreads + " | " + hackThreads);
+                    ns.print("INFO " + maxPercentage.toFixed(1) + "  GW " + target + " " + weakThreads + " | " + growThreads + " | " + hackThreads);
                 }
             }
             else {
@@ -303,7 +325,7 @@ function manageAndHack(ns, freeRams, servers, targets) {
         }
         else if (hackThreads == 0) {
             // regular attack
-            ns.print("INFO 1 weak/grow attack on " + target + " with " + weakThreads + " | " + growThreads + " | " + hackThreads);
+            ns.print("INFO 1    GW " + target + " " + weakThreads + " | " + growThreads + " | " + hackThreads);
             if (partialWeakGrow == target) {
                 // if we ran a partial weak/grow before and could do a full one now, reset partial attack
                 partialWeakGrow = null;
@@ -323,14 +345,14 @@ function manageAndHack(ns, freeRams, servers, targets) {
             weakTime = ns.getWeakenTime(target);
             growTime = ns.getGrowTime(target);
             hackTime = ns.getHackTime(target);
-            var maxAttacksDuringHack = Math.floor((hackTime - timeBetweenAttacks) / timeBetweenAttacks);
+            var maxAttacksDuringHack = Math.floor((weakTime - timeBetweenAttacks) / timeBetweenAttacks);
             var moreRamNeed = 0;
 
             for (parallelAttacks = 1; parallelAttacks < maxAttacksDuringHack; parallelAttacks++) {
                 // check if we have enough RAM for one more attack
                 moreRamNeed = ((weakThreads * (parallelAttacks + 1) + growThreads * (parallelAttacks + 1) +
                     hackThreads * (parallelAttacks + 1)) * slaveScriptRam);
-                if (moreRamNeed >= freeRams[1]) {
+                if (moreRamNeed >= freeRams.overallFreeRam) {
                     // we do not have enough RAM for more attacks
                     break;
                 }
@@ -342,22 +364,22 @@ function manageAndHack(ns, freeRams, servers, targets) {
                     // check if max parallel attacks have been limited 
                     break;
                 }
-                else if ((freeRams[1] / freeRams[2] < 0.1 || partialAttacks > 1) && (partialWeakGrow != null || freeRams < 512)) {
-                    // if we are low on RAM, go for sincle attacks for better efficiency
+                else if ((freeRams.overallFreeRam / freeRams.overallMaxRam < 0.1 || partialAttacks > 2) && (partialWeakGrow != null || freeRams.overallMaxRam < 512)) {
+                    // if we are low on RAM, go for single attacks for better efficiency
                     break;
                 }
                 // increment parallel attacks via for loop
             }
-            ns.print("INFO " + parallelAttacks + " attacks on " + target + " with " + weakThreads + " | " + growThreads + " | " + hackThreads);
+            ns.print("INFO " + parallelAttacks + "   HGW " + target + " " + weakThreads + " | " + growThreads + " | " + hackThreads);
         }
 
         // re-calculate overall RAM need after scaling full attacs down or up
         overallRamNeed = ((weakThreads + growThreads + hackThreads) * slaveScriptRam) * parallelAttacks;
-        if (overallRamNeed > freeRams[1]) {
-            // Typically, there should be enough RAM for the planned attack 
-            ns.print("WARN RAM calculation issue for target: " + target + " need / free: " + overallRamNeed + " / " + freeRams[1]);
+        if (overallRamNeed > freeRams.overallFreeRam) {
+            // Typically, there should be enough RAM for the planned attack. Warn if not.
+            ns.print("WARN RAM calculation issue for target: " + target + " need / free: " + overallRamNeed + " / " + freeRams.overallFreeRam);
         }
-        freeRams[1] -= overallRamNeed;
+        freeRams.overallFreeRam -= overallRamNeed;
 
         // by default, no sleep time for threads
         var weakSleep = 0;
@@ -393,21 +415,31 @@ function manageAndHack(ns, freeRams, servers, targets) {
             }
         }
 
+        var growStock = growStocks.has(target);
+        var hackStock = hackStocks.has(target);
+        if (growStock) {
+            ns.print("INFO GRW stock " + target);
+        }
+        if (hackStock) {
+            ns.print("INFO HCK stock " + target);
+        }
+
         for (var i = 0; i < parallelAttacks; i++) {
             if (weakThreads > 0) {
-                if (!findPlaceToRun(ns, weakenScriptName, weakThreads, freeRams[0], target, weakSleep)) {
+                if (!findPlaceToRun(ns, weakenScriptName, weakThreads, freeRams.serverRams, target, weakSleep)) {
                     ns.print("WARN Did not find a place to run weaken " + target + " needs " + overallRamNeed)
                     return
                 }
             }
             if (growThreads > 0) {
-                if (!findPlaceToRun(ns, growScriptName, growThreads, freeRams[0], target, growSleep)) {
+                if (!findPlaceToRun(ns, growScriptName, growThreads, freeRams.serverRams, target, growSleep, growStock)) {
                     ns.print("WARN Did not find a place to run grow " + target + " needs " + overallRamNeed)
                     return;
                 }
             }
             if (hackThreads > 0) {
-                if (!findPlaceToRun(ns, hackScriptName, hackThreads, freeRams[0], target, hackSleep)) {
+
+                if (!findPlaceToRun(ns, hackScriptName, hackThreads, freeRams.serverRams, target, hackSleep, hackStock)) {
                     ns.print("WARN Did not find a place to run hack " + target + " needs " + overallRamNeed)
                     return;
                 }
@@ -425,33 +457,26 @@ function manageAndHack(ns, freeRams, servers, targets) {
 function xpWeaken(ns, freeRams, servers, targets) {
 
     // let weken threads for XP farming sleep for this amount of ms
-    //Needed to discriminate from regular weaken threads (with sleep 0)
+    // Needed to discriminate from regular weaken threads (with sleep 0)
     // other weaken threads should never sleep for 1 ms
     const xpWeakSleep = 1;
 
-    // pick a server to target for XP weak
-    // the last server from the list should have a high min security which is not a poor choice
-    // TODO: target selection can be optimized
-
     const playerHackingLevel = ns.getHackingLevel();
     targets.sort((a, b) => weakenXPgainCompare(ns, playerHackingLevel, a) - weakenXPgainCompare(ns, playerHackingLevel, b))
-    var weakTarget = targets[0];
 
-    //   for (var target of targets.values()) {
-    //       if (ns.getServerSecurityLevel(target) == ns.getServerMinSecurityLevel(target))
-    //           weakTarget = target;
-    //   }
-
-    if (xpAttackOngoing(ns, servers, weakTarget, xpWeakSleep) == false) {
-        // we have free RAM for this many weak threads
-        var weakThreads = freeRams[1] / slaveScriptRam;
-        // however, do not use all of it, only use a part of it to leave some buffer for the hack threads
-        weakThreads = Math.floor(weakThreads * 0.8);
-        if (weakThreads > 0) {
-            ns.print("INFO XP weaken attack on " + weakTarget + " with " + weakThreads);
-            if (!findPlaceToRun(ns, weakenScriptName, weakThreads, freeRams[0], weakTarget, xpWeakSleep)) {
-                ns.print("WARN Did not find a place to run XP weaken " + weakTarget)
-                return
+    for (let target of targets) {
+        if (xpAttackOngoing(ns, servers, target, xpWeakSleep) == false) {
+            // we have free RAM for this many weak threads
+            var weakThreads = freeRams.overallFreeRam / slaveScriptRam;
+            // however, do not use all of it, only use a part of it to leave some buffer for the hack threads
+            weakThreads = Math.floor(weakThreads * 0.6);
+            if (weakThreads > 0) {
+                ns.print("WARN XP weaken attack on " + weakTarget + " with " + weakThreads);
+                if (!findPlaceToRun(ns, weakenScriptName, weakThreads, freeRams.serverRams, weakTarget, xpWeakSleep)) {
+                    ns.print("WARN Did not find a place to run XP weaken " + weakTarget)
+                    
+                }
+                return;
             }
         }
     }
@@ -466,15 +491,8 @@ function weakenXPgainCompare(ns, playerHackingLevel, target) {
 
 // find some place to run the script with given amount of threads
 // returns true means script was executed, false means it didnt
-function findPlaceToRun(ns, script, threads, freeRams, target, sleepTime) {
-    var remaingThread = threads;
-    while (true) {
-        // if no more host with ram, return false
-        if (freeRams.length === 0) {
-            ns.print("WARN missing " + slaveScriptRam * remaingThread + " for " + script + " RAM for target " + target);
-            return false;
-        }
-
+function findPlaceToRun(ns, script, threads, freeRams, target, sleepTime, manipulateStock = false) {
+    while (freeRams.length > 0) {
         // try with first availiable host
         var host = freeRams[0].host;
         var ram = freeRams[0].freeRam;
@@ -484,40 +502,34 @@ function findPlaceToRun(ns, script, threads, freeRams, target, sleepTime) {
             freeRams.shift();
 
             // else if the ram on the host is not enough to run all threads, just run as much as it can
-        } else if (ram < slaveScriptRam * remaingThread) {
+        }
+        else if (ram < slaveScriptRam * threads) {
             const threadForThisHost = Math.floor(ram / slaveScriptRam);
-
-            // try to run the script, at this point this will only fail if
-            // the host is already running the script against the same target,
-            // from an earlier cycle
-            if (ns.exec(script, host, threadForThisHost, target, sleepTime) === 0) {
-                // if failed, than find the next host to run it, and return its result
-                return findPlaceToRun(ns, script, threads, freeRams.slice(1), target, sleepTime);
-            } else {
-                // if run successed update thread to run and remove this host from the list
-                // if (script === "hack.js") {
-                // ns.tprint(`executing ${script} on ${host} with ${threadForThisHost} threads, targeting ${target}`)
-                // }
-                remaingThread -= threadForThisHost;
-                freeRams.shift();
+            if (manipulateStock) {
+                ns.exec(script, host, threadForThisHost, target, sleepTime, manipulateStock);
             }
-        } else {
-            // try to run the script, at this point this will only fail if
-            // the host is already running the script against the same target,
-            // from an earlier cycle
-            if (ns.exec(script, host, remaingThread, target, sleepTime) === 0) {
-                // if failed, than find the next host to run it, and return its result
-                if (!findPlaceToRun(ns, script, threads, freeRams.slice(1), target, sleepTime)) {
-                    return false;
-                }
-            } else {
-                // if run successed update the remaining ram for this host
-                freeRams[0].freeRam -= slaveScriptRam * remaingThread;
+            else {
+                ns.exec(script, host, threadForThisHost, target, sleepTime);
             }
-
+            threads -= threadForThisHost;
+            freeRams.shift();
+        }
+        else { // enough RAM on this host to run all threads
+            if (manipulateStock) {
+                ns.exec(script, host, threads, target, sleepTime, manipulateStock)
+            }
+            else {
+                ns.exec(script, host, threads, target, sleepTime);
+            }
+            freeRams[0].freeRam -= slaveScriptRam * threads;
             return true;
         }
     }
+
+    // we did not find enough RAM to run all remaining threads. Something went from in the RAM calculation
+    ns.print("WARN missing " + slaveScriptRam * threads + " for " + script + " RAM for target " + target);
+    return false;
+
 }
 
 // check whether there is already an attack against a target ongoing
@@ -566,7 +578,6 @@ function getHackable(ns, servers) {
 
     return [...servers.values()].filter(server => ns.getServerMaxMoney(server) > 100000
         && ns.getServerRequiredHackingLevel(server) <= ns.getHackingLevel()
-        && ns.getServerMoneyAvailable(server) > 1
         && ns.getServerGrowth(server) > 1)
         .sort((a, b) => 5 * ns.getServerMinSecurityLevel(a) - 5 * ns.getServerMinSecurityLevel(b)
             + ns.getServerGrowth(b) - ns.getServerGrowth(a))
@@ -579,9 +590,10 @@ function getHackable(ns, servers) {
 
 // filter the list for servers where we can run script on
 function getFreeRam(ns, servers) {
-    const freeRams = [];
-    var overallMaxRam = 0;
+    var serverRams = [];
     var overallFreeRam = 0;
+    var overallMaxRam = 0;
+
     for (let server of servers) {
         const maxRam = ns.getServerMaxRam(server);
         const usedRam = ns.getServerUsedRam(server)
@@ -590,17 +602,17 @@ function getFreeRam(ns, servers) {
         freeRam = Math.floor(freeRam / slaveScriptRam) * slaveScriptRam
         overallMaxRam += maxRam;
         if (freeRam >= slaveScriptRam) {
-            freeRams.push({ host: server, freeRam: freeRam });
+            serverRams.push({ host: server, freeRam: freeRam });
             overallFreeRam += freeRam;
         }
     }
-    var sortedFreeRams = freeRams.sort((a, b) => b.freeRam - a.freeRam);
+    serverRams.sort((a, b) => b.freeRam - a.freeRam);
 
-    return [sortedFreeRams, overallFreeRam, overallMaxRam];
+    return { serverRams, overallFreeRam, overallMaxRam };
 }
 
 // scan all servers from home and nuke them if we can
-async function scanAndHack(ns) {
+async function scanAndNuke(ns) {
     let servers = new Set(["home"]);
     scanAll(ns, "home", servers);
     var accessibleServers = new Set();
@@ -617,7 +629,6 @@ async function scanAndHack(ns) {
                 await ns.ftpcrack(server);
                 portOpened++;
             }
-
             if (await ns.fileExists("HTTPWorm.exe")) {
                 await ns.httpworm(server);
                 portOpened++;
@@ -626,12 +637,10 @@ async function scanAndHack(ns) {
                 await ns.relaysmtp(server);
                 portOpened++;
             }
-
             if (await ns.fileExists("SQLInject.exe")) {
                 await ns.sqlinject(server);
                 portOpened++;
             }
-
             if (await ns.getServerNumPortsRequired(server) <= portOpened) {
                 await ns.nuke(server);
                 accessibleServers.add(server);
@@ -650,3 +659,98 @@ function scanAll(ns, host, servers) {
         }
     }
 }
+
+export function getStockPortContent(ns, portNumber, content) {
+    var portHandle = ns.getPortHandle(portNumber);
+    var firstPortElement = portHandle.peek();
+    if (firstPortElement == "NULL PORT DATA") {
+        // no new data available
+        return content;
+    } else if (firstPortElement == "EMPTY") {
+        // "EMPTY" means that the list shall be set to empty
+        portHandle.clear();
+        return new Set();
+    }
+    else { // list shall be updated
+        content = new Set();
+        while (!portHandle.empty()) {
+            content.add(portHandle.read());
+        }
+    }
+    return content;
+}
+
+
+/*
+-- General Strategy --
+
+Design goals:
+- Utilize as much of the available RAM at all times
+- Utilize the RAM as efficiently as possible, which means only perfect attack patterns using different strategies by
+- Adapting to any situation automatically (early - late game)
+
+What is a "perfect" attack pattern?
+Baseline is one HGW pattern: (H)ack, Re-(G)row the money hacked and (W)eaken the security added. Anticipate the amount of grow and weaken needed beforehand.
+Deploy all three in parallel in specialized scripts on servers. Attack a server with min security and max money (weaken + grow initially).
+
+The HGW pattern has one variable for tuning: The percentage of money hacked. Re-growth need does not scale linearly with hack:
+Twice the amount of hack threads requires far more than twice the amount of grow threads.
+Thus it is more RAM efficient to hack for small percentages of money only; bigger attacks are less RAM efficient.
+
+The basic HGW attack pattern can be scaled in two ways based on the amount of free RAM available:
+- Adjust the percentage of money to hack per HGW
+- Attack multiple servers in parallel
+
+So early game, the optimal strategy is to continuosly attack all possible servers in parallel
+with almost all available RAM using the HGW pattern with a low percentage of money hacked.
+
+Also note that hack threads finish way earlier than grow or weak threads. That means RAM which becomes available after hack finishes,
+while grow and weak are still running from one HGW pattern: That RAM can be used immediately for something else.
+Example: 1) Start "HGW" attack on server n00dles.
+2) "H" finishes. Use that free RAM from "H" for HGW attack on server foodnstuff. 3) "GW" from noodles finish.
+
+HGW burst attack patterns:
+At some point in time there is enough RAM available to fully hack all servers perfectly for 99.9% of their money continuously.
+More RAM cannot be put to use. Now comes the next mechanic and variable for tuning into play:
+Burst HGW attacks. HGW bursts are timed so that H, G + W all finish within a short amount of time
+by delaying the start of H and G (W always takes longest). Using normal HGW attacks, you can attack once
+during the time W runs (often: minutes). With burst attacks which are timed to 1 second,
+you can attack one server once every second! (over-simplified [technical details], see later)
+
+Burst attacks are extremely powerful, why not use them always? Remember that regular HGW attacks free up RAM from
+finished H attacks that can be used already while the "GW" attack continues.
+Especially early-game, the majority of threads in an HGW pattern are hack threads (late game: grow).
+So while burst attacks can use up to 100% RAM, many threads will just wait for some time before they start - while blocking
+the RAM. So the RAM is not efficiently used (for just waiting).
+
+Thus regular HGW attacks are optimal early-game until they cannot use more RAM anymore.
+Then burst attacks become the optimal strategy for utilizing more RAM.
+
+The limit for burst attacks comes with the [technical details] mentioned in the over-simplification above: The targeted server
+needs to be at min sec when threads are started. So we cannot start any new attacks while running attacks are hitting the target.
+Example: An HGW execution time takes 10 seconds. We chain 9 attacks in parallel each with 1 second delay from the previous one.
+Then the 9 attacks are hitting for 10 seconds and during that time we cannot guarantee that the server has min security or max money
+We need to wait until the running attack burst is finished before starting the next burst.
+
+So burst attacks can scale up to a certain extent when run against all servers at maximum potential. Then, more RAM cannot be used anymore.
+At this point in time money income  will most likely be absurdly too much to spend. However the game might not be finished just with money.
+Another benefit of hacking is experience gain. So at later stages experience gain can be increased by just spamming useless W attacks.
+
+Potential weaknesses:
+- Where is the rocket science about "which is the best server to hack"? It does matter, but not much with this strategy since we attack many servers simultaneously.
+    Up to now a rather simple ranking function is used.
+- Depending on how big the impact of "best" vs "worst" servers to hack is, it might actually more "effective" to "inefficiently" hack the "best" server than to "efficiently"
+    hack all servers. Or on other words, burst attacking a high value server might be the better approach than single-attacking multiple servers.
+- This approach utilizes resources to initially weaken and grow all servers. So the money income grow starts slow early game while inizializing servers without hacking them.
+    To limit resources spent on initializing many servers in parallel and prioritize resources on hacking few servers (HGW), RAM utilization is sometimes not optimized early game
+    on purpose. Approaches with faster money income ramp-up time can enable buying more servers faster for more RAM.
+- The dynamic situation analysis for continuously choosing and tuning the strategy is not too highly sophisticated. Tailoring an attack strategy for a certain situation
+    and time interval can certailny beat the situation analysis here (like the "ramp-up" issue mentioned above).
+- This approach does not contribute anything while offline.
+
+Summary: The optimal strategy depends on and changes with the situation.
+- Early game: Regular HGW attacks, scale with money hacked & multiple targets
+- Mid game: Switch from HGW to Burst attacks, scale with burst size & multiple targets
+- Late game: Use free RAM for spamming W
+
+*/
