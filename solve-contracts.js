@@ -2,6 +2,7 @@ import { getAllServers } from "getServers.js";
 
 export async function main(ns) {
     ns.disableLog("ALL");
+    // This script could run separately in a loop, howeverit is more RAM-efficient to call the script from a management script
     //while (true) {    
         // get all available servers
         const servers = getAllServers(ns)
@@ -16,6 +17,7 @@ export async function main(ns) {
         });
         //ns.tprint("Found " + contracts.length + " contracts");
         contracts.forEach((contract) => void ns.print(contract));
+        // sleep in case this script is run manually
         //await ns.sleep(60000)
     //}
     return;

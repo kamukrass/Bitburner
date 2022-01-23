@@ -2,6 +2,9 @@
 
 // does not require 4s Market Data TIX API Access
 
+// defines if stocks can be shorted (see BitNode 8)
+const shortAvailable = false;
+
 const commission = 100000;
 const samplingLength = 30;
 
@@ -145,7 +148,7 @@ export async function main(ns) {
             longStocks.add(sym);
             ns.print(`INFO BOUGHT (long) ${sym}.`);
           }
-        } else if (state < 0 && !sold) {
+        } else if (state < 0 && !sold && shortAvailable) {
           const sharesToBuy = Math.min(ns.stock.getMaxShares(sym), Math.floor((money - commission) / bidPrice));
           if (ns.stock.short(sym, sharesToBuy) > 0) {
             shortStocks.add(sym);

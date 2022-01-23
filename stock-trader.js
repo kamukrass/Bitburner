@@ -2,6 +2,9 @@
 
 // requires 4s Market Data TIX API Access
 
+// defines if stocks can be shorted (see BitNode 8)
+const shortAvailable = false;
+
 const commission = 100000;
 
 export async function main(ns) {
@@ -68,7 +71,7 @@ function tendStocks(ns) {
                 }
             }
         }
-        else if (stock.forecast < 0.43) {
+        else if (stock.forecast < 0.43 && shortAvailable) {
             shortStocks.add(stock.sym);
             //ns.print(`INFO ${stock.summary}`);
             if (money > 100 * commission) {

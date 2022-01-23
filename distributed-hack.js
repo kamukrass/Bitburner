@@ -39,6 +39,7 @@ const hackScriptName = "hack.js";
 const files = [weakenScriptName, growScriptName, hackScriptName];
 
 // Backdoor script hooked in (requires singluarity functions SF4.1)
+const singularityFunctionsAvailable = false;
 const backdoorScript = "backdoor.js"
 const backdoorScriptRam = 65.8;
 
@@ -103,18 +104,20 @@ export async function main(ns) {
             await ns.scp(files, "home", server);
             // ToDo: Not efficient to loop through all servers always. Could be optimized to track which server was optimized and scp only once.
 
-            // backdoor faction servers automatically
-            // requires singularity module
-            for (var backdoorServer of backdoorServers.values()) {
-                if (server == backdoorServer) {
-                    if (ns.getServerRequiredHackingLevel(server) <= ns.getHackingLevel()) {
-                        const homeMaxRam = ns.getServerMaxRam("home");
-                        const homeUsedRam = ns.getServerUsedRam("home")
-                        const homeFreeRam = homeMaxRam - homeUsedRam;
-                        if (homeFreeRam >= backdoorScriptRam) {
-                            const backdoorSuccess = ns.exec(backdoorScript, "home", 1, server);
-                            ns.print("INFO backdoor on " + server + " - " + backdoorSuccess);
-                            backdoorServers.delete(backdoorServer);
+            // backdoor faction servers automatically requires singularity module
+            // modify singularityFunctionsAvailable at the top to de- / activate
+            if (singularityFunctionsAvailable == true) {
+                for (var backdoorServer of backdoorServers.values()) {
+                    if (server == backdoorServer) {
+                        if (ns.getServerRequiredHackingLevel(server) <= ns.getHackingLevel()) {
+                            const homeMaxRam = ns.getServerMaxRam("home");
+                            const homeUsedRam = ns.getServerUsedRam("home")
+                            const homeFreeRam = homeMaxRam - homeUsedRam;
+                            if (homeFreeRam >= backdoorScriptRam) {
+                                const backdoorSuccess = ns.exec(backdoorScript, "home", 1, server);
+                                ns.print("INFO backdoor on " + server + " - " + backdoorSuccess);
+                                backdoorServers.delete(backdoorServer);
+                            }
                         }
                     }
                 }
@@ -474,7 +477,7 @@ function xpWeaken(ns, freeRams, servers, targets) {
                 ns.print("WARN XP weaken attack on " + weakTarget + " with " + weakThreads);
                 if (!findPlaceToRun(ns, weakenScriptName, weakThreads, freeRams.serverRams, weakTarget, xpWeakSleep)) {
                     ns.print("WARN Did not find a place to run XP weaken " + weakTarget)
-                    
+
                 }
                 return;
             }
