@@ -39,7 +39,7 @@ const hackScriptName = "hack.js";
 const files = [weakenScriptName, growScriptName, hackScriptName];
 
 // Backdoor script hooked in (requires singluarity functions SF4.1)
-const singularityFunctionsAvailable = false;
+const singularityFunctionsAvailable = true;
 const backdoorScript = "backdoor.js"
 const backdoorScriptRam = 65.8;
 
@@ -738,6 +738,9 @@ We need to wait until the running attack burst is finished before starting the n
 So burst attacks can scale up to a certain extent when run against all servers at maximum potential. Then, more RAM cannot be used anymore.
 At this point in time money income  will most likely be absurdly too much to spend. However the game might not be finished just with money.
 Another benefit of hacking is experience gain. So at later stages experience gain can be increased by just spamming useless W attacks.
+
+On top of that, the script features ports to receive hack or grow orders for certain servers in order to manipulate
+the stock market. 
 
 Potential weaknesses:
 - Where is the rocket science about "which is the best server to hack"? It does matter, but not much with this strategy since we attack many servers simultaneously.
