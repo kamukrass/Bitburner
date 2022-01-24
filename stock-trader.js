@@ -3,7 +3,7 @@
 // requires 4s Market Data TIX API Access
 
 // defines if stocks can be shorted (see BitNode 8)
-const shortAvailable = false;
+const shortAvailable = true;
 
 const commission = 100000;
 
@@ -29,13 +29,13 @@ function tendStocks(ns) {
         if (stock.longShares > 0) {
             if (stock.forecast > 0.5) {
                 longStocks.add(stock.sym);
-                ns.print(`INFO ${stock.summary} LONG ${ns.nFormat(stock.value, "0a")} ${ns.nFormat(100 * stock.profit / stock.value, "0.00")}%`);
+                ns.print(`INFO ${stock.summary} LONG ${ns.nFormat(stock.cost + stock.profit, "0a")} ${ns.nFormat(100 * stock.profit / stock.cost, "0.00")}%`);
             }
             else {
                 const salePrice = ns.stock.sell(stock.sym, stock.longShares);
                 const saleTotal = salePrice * stock.longShares;
                 const saleCost = stock.longPrice * stock.longShares;
-                const saleProfit = saleTotal - saleCost - commission;
+                const saleProfit = saleTotal - saleCost - 2 * commission;
                 stock.shares = 0;
                 shortStocks.add(stock.sym);
                 ns.print(`WARN ${stock.summary} SOLD for ${ns.nFormat(saleProfit, "$0.0a")} profit`);
@@ -44,13 +44,13 @@ function tendStocks(ns) {
         if (stock.shortShares > 0) {
             if (stock.forecast < 0.5) {
                 shortStocks.add(stock.sym);
-                ns.print(`INFO ${stock.summary} SHORT ${format(stock.value)} ${ns.nFormat(-100 * stock.profit / stock.value, "0.00")}%`);
+                ns.print(`INFO ${stock.summary} SHORT ${ns.nFormat(stock.cost + stock.profit, "0a")} ${ns.nFormat(100 * stock.profit / stock.cost, "0.00")}%`);
             }
             else {
                 const salePrice = ns.stock.sellShort(stock.sym, stock.shortShares);
                 const saleTotal = salePrice * stock.shortShares;
                 const saleCost = stock.shortPrice * stock.shortShares;
-                const saleProfit = saleTotal - saleCost - commission;
+                const saleProfit = saleTotal - saleCost - 2 * commission;
                 stock.shares = 0;
                 longStocks.add(stock.sym);
                 ns.print(`WARN ${stock.summary} SHORT SOLD for ${ns.nFormat(saleProfit, "$0.0a")} profit`);
@@ -118,9 +118,11 @@ function getAllStocks(ns) {
             bidPrice: ns.stock.getBidPrice(sym),
             maxShares: ns.stock.getMaxShares(sym),
         };
-        stock.value = (stock.longShares * stock.bidPrice) + (stock.shortShares * stock.askPrice);
-        stock.initialValue = (stock.longShares * stock.longPrice) + (stock.shortShares * stock.shortPrice);
-        stock.profit = stock.value - stock.initialValue - commission;
+
+        var longProfit = stock.longShares * ( stock.bidPrice - stock.longPrice ) - 2 * commission;
+        var shortProfit = stock.shortShares * ( stock.shortPrice - stock.askPrice ) - 2 * commission;
+        stock.profit = longProfit + shortProfit;
+        stock.cost = (stock.longShares * stock.longPrice) + (stock.shortShares * stock.shortPrice)
         var profitPotential = 2 * Math.abs(stock.forecast - 0.5);
 
         profitPotential *= (stock.volatility / 8);
