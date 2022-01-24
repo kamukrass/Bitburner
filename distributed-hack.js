@@ -471,9 +471,9 @@ function xpWeaken(ns, freeRams, servers, targets) {
             // however, do not use all of it, only use a part of it to leave some buffer for the hack threads
             weakThreads = Math.floor(weakThreads * 0.6);
             if (weakThreads > 0) {
-                ns.print("WARN XP weaken attack on " + weakTarget + " with " + weakThreads);
-                if (!findPlaceToRun(ns, weakenScriptName, weakThreads, freeRams.serverRams, weakTarget, xpWeakSleep)) {
-                    ns.print("WARN Did not find a place to run XP weaken " + weakTarget)
+                ns.print("WARN XP weaken attack on " + target + " with " + weakThreads);
+                if (!findPlaceToRun(ns, weakenScriptName, weakThreads, freeRams.serverRams, target, xpWeakSleep)) {
+                    ns.print("WARN Did not find a place to run XP weaken " + target)
 
                 }
                 return;
