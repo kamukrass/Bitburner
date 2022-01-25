@@ -64,7 +64,7 @@ function tendStocks(ns) {
         if (stock.forecast > 0.57) {
             longStocks.add(stock.sym);
             //ns.print(`INFO ${stock.summary}`);
-            if (money > 100 * commission) {
+            if (money > 500 * commission) {
                 const sharesToBuy = Math.min(stock.maxShares, Math.floor((money - commission) / stock.askPrice));
                 if (ns.stock.buy(stock.sym, sharesToBuy) > 0) {
                     ns.print(`WARN ${stock.summary} LONG BOUGHT ${ns.nFormat(sharesToBuy, "$0.0a")}`);
@@ -74,7 +74,7 @@ function tendStocks(ns) {
         else if (stock.forecast < 0.43 && shortAvailable) {
             shortStocks.add(stock.sym);
             //ns.print(`INFO ${stock.summary}`);
-            if (money > 100 * commission) {
+            if (money > 500 * commission) {
                 const sharesToBuy = Math.min(stock.maxShares, Math.floor((money - commission) / stock.bidPrice));
                 if (ns.stock.short(stock.sym, sharesToBuy) > 0) {
                     ns.print(`WARN ${stock.summary} SHORT BOUGHT ${ns.nFormat(sharesToBuy, "$0.0a")}`);

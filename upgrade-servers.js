@@ -18,7 +18,7 @@ export async function main(ns) {
 		ownedServers.sort((a, b) => ns.getServerMaxRam(b) - ns.getServerMaxRam(a));
 		if (ownedServers.length > 0) {
 			// never buy for less than we already have
-			maxPurchaseableRam = ns.getServerMaxRam(ownedServers[0]);
+			maxPurchaseableRam = Math.max(maxPurchaseableRam, ns.getServerMaxRam(ownedServers[0]));
 		}
 
 		var ramUpgradeCost = ns.getPurchasedServerCost(maxPurchaseableRam);
