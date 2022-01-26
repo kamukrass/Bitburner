@@ -133,18 +133,6 @@ function getAllStocks(ns) {
     return stocks;
 }
 
-function format(money) {
-    const prefixes = ["", "k", "m", "b", "t", "q"];
-    for (let i = 0; i < prefixes.length; i++) {
-        if (Math.abs(money) < 1000) {
-            return `${Math.floor(money * 10) / 10}${prefixes[i]}`;
-        } else {
-            money /= 1000;
-        }
-    }
-    return `${Math.floor(money * 10) / 10}${prefixes[prefixes.length - 1]}`;
-}
-
 function getSymServer(sym) {
     const symServer = {
         "WDS": "",
