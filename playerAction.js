@@ -63,10 +63,6 @@ function chooseAction(ns, sleepTime, player, factions) {
 	if (ns.getHackingLevel() < studyUntilHackLevel) {
 		ns.universityCourse("rothman university", "Study Computer Science", true);
 	}
-	else if (focus && (player.money < crimeUntilMoney)) {
-		const crimeTime = commitCrime(ns, player);
-		return crimeTime;
-	}
 	else if (factions.size > 0) {
 		const wType = "Hacking Contracts";
 		var faction = factions.keys().next().value
@@ -119,6 +115,10 @@ function chooseAction(ns, sleepTime, player, factions) {
 			}
 		}
 	}
+	else if (focus) {
+		const crimeTime = commitCrime(ns, player);
+		return crimeTime;
+	}
 	return sleepTime;
 }
 
@@ -126,14 +126,17 @@ function currentActionUseful(ns, player, factions) {
 	var playerControlPort = ns.getPortHandle(3); // port 2 is hack
 	if (player.workType == "Working for Faction") {
 		if (factions.has(player.currentWorkFactionName)) {
-			if (player.workRepGained < factions.get(player.currentWorkFactionName)) {
+			var repRemaining = factions.get(player.currentWorkFactionName) - player.workRepGained;
+			if (repRemaining > 0) {
 				// working for a faction needing more reputation for augmentations
 				if (playerControlPort.empty()) {
 					// only write to ports if empty
 					playerControlPort.write(true);
 
 				}
-				ns.print("Reputation remaining: " + ns.nFormat(factions.get(player.currentWorkFactionName) - player.workRepGained, "0a"));
+				// seems a cycle is .2 ms, so RepGainRate * 5 is gain per second
+				var reputationTimeRemaining = repRemaining / (player.workRepGainRate * 5);
+				ns.print("Reputation remaining: " + ns.nFormat(repRemaining, "0a") + " in " + ns.nFormat(reputationTimeRemaining / 60, "0a") + " min");
 				return true;
 			}
 			else {
@@ -222,10 +225,9 @@ function commitCrime(ns, player, combatStatsGoal = 75) {
 	var bestCrime = "";
 	var bestCrimeValue = 0;
 	var crimeStats = {};
-	for (let crime in crimes) {
-
+	for (let crime of crimes) {
 		let crimeChance = ns.getCrimeChance(crime);
-		let crimeStats = ns.getCrimeStats(crime);
+		crimeStats = ns.getCrimeStats(crime);
 		if (crime == "Assassination" && player.numPeopleKilled < 30 && crimeChance > 0.99) {
 			bestCrime = "Assassination";
 			break;
@@ -236,16 +238,16 @@ function commitCrime(ns, player, combatStatsGoal = 75) {
 		}
 		var crimeValue = 0;
 		if (player.strength < combatStatsGoal) {
-			crimeValue += crimeStats.strength_exp;
+			crimeValue += 10 * crimeStats.strength_exp;
 		}
 		if (player.defense < combatStatsGoal) {
-			crimeValue += crimeStats.defense_exp;
+			crimeValue += 10 * crimeStats.defense_exp;
 		}
 		if (player.dexterity < combatStatsGoal) {
-			crimeValue += crimeStats.dexterity_exp;
+			crimeValue += 10 * crimeStats.dexterity_exp;
 		}
 		if (player.agility < combatStatsGoal) {
-			crimeValue += crimeStats.agility_exp;
+			crimeValue += 10 * crimeStats.agility_exp;
 		}
 		crimeValue += crimeStats.money;
 
@@ -254,24 +256,12 @@ function commitCrime(ns, player, combatStatsGoal = 75) {
 			bestCrime = crime;
 			bestCrimeValue = crimeValue;
 		}
-		ns.print(JSON.stringify(crimeStats));
+		//ns.print(JSON.stringify(crimeStats));
 	}
-	/*
-		let choices = crimes.map((crime) => {
-			let crimeStats = ns.getCrimeStats(crime); // Let us look at the important bits
-			let crimeChance = ns.getCrimeChance(crime); // We need to calculate if its worth it
-			// Larger risk values indicate a better choice
-			let crimeRiskValue = crimeStats.money * crimeChance / crimeStats.time;
-			return [crime, crimeRiskValue, crimeStats.time];
-		});
-	
-		let bestCrime = choices.reduce((prev, current) => {
-			return prev[1] > current[1] ? prev : current;
-		});
-	*/
+
 	ns.commitCrime(bestCrime);
 
-	ns.print("Crime value " + ns.nFormat(bestCrimeValue, "0.0a") + " xp + $ / s");
+	ns.print("Crime value " + ns.nFormat(bestCrimeValue, "0a") + " (xp + $) / s");
 	return crimeStats.time;
 }
 
