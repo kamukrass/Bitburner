@@ -34,6 +34,8 @@ const slaveScriptRam = 1.75;
 const weakenScriptName = "weaken.js";
 const growScriptName = "grow.js";
 const hackScriptName = "hack.js";
+const shareScriptName = "share.js";
+const shareScriptRam = 4;
 
 // list of slave script files
 const files = [weakenScriptName, growScriptName, hackScriptName];
@@ -64,7 +66,7 @@ export async function main(ns) {
     ns.disableLog("ALL");
 
     // automatically backdoor these servers. Requires singularity functions.
-    var backdoorServers = new Set(["CSEC", "I.I.I.I", "avmnite-02h", "run4theh111z"]);
+    var backdoorServers = new Set(["CSEC", "I.I.I.I", "avmnite-02h", "run4theh111z", "clarkinc", "nwo", "omnitek", "fulcrumtech", "fulcrumassets", "w0r1d_d43m0n"]);
 
     var servers;
     var targets;
@@ -94,6 +96,9 @@ export async function main(ns) {
     var growStocks = new Set();
     var hackStocks = new Set();
 
+    var moneyXpShare = false
+    var shareThreadIndex = 0;
+
     while (true) {
         // scan and nuke all accesible servers
         servers = await scanAndNuke(ns);
@@ -102,7 +107,7 @@ export async function main(ns) {
         for (var server of servers) {
             // transfer files to the servers
             await ns.scp(files, "home", server);
-            // ToDo: Not efficient to loop through all servers always. Could be optimized to track which server was copied and scp only once.
+            // ToDo: Not efficient to loop through all servers always. Could be optimized to track which server was optimized and scp only once.
 
             // backdoor faction servers automatically requires singularity module
             // modify singularityFunctionsAvailable at the top to de- / activate
@@ -136,7 +141,16 @@ export async function main(ns) {
         growStocks = getStockPortContent(ns, 1, growStocks); // port 1 is grow
         hackStocks = getStockPortContent(ns, 2, hackStocks); // port 2 is hack
 
-        // Main logic sits here, determine whether or not and how many threads we should call weaken, grow and hack  
+        var portHandle = ns.getPortHandle(3); // port 3 is player control currenty for money + xpWeaken, money + share or share only
+        //var firstPortElement = portHandle.peek();
+        if (!portHandle.empty()) {
+            // hack for money and experience: money-xp
+            // hack for money and faction reputation: money-share
+            // hack for faction reputation only: share-only
+            moneyXpShare = portHandle.read();
+        }
+
+        // Main logic sits here, determine whether or not and how many threads we should call weaken, grow and hack
         manageAndHack(ns, freeRams, servers, targets, growStocks, hackStocks);
 
         // Adjust hackMoneyRatio
@@ -159,13 +173,31 @@ export async function main(ns) {
         // even if the situation did not change. Intended: Only changed situations shall be re-interpreted. Introduce tracking variable to only evaluate
         // if an attack was launched
 
-        // Hook in solve contracts script here if enough RAM is free.
+        // Hook for solve contracts script here if enough RAM is free.
         const homeMaxRam = ns.getServerMaxRam("home");
         const homeUsedRam = ns.getServerUsedRam("home")
         const homeFreeRam = homeMaxRam - homeUsedRam;
         if (homeFreeRam > solveContractsScriptRam) {
             //ns.print("INFO checking for contracts to solve");
             ns.exec(solveContractsScript, "home");
+        }
+
+        if (moneyXpShare && hackMoneyRatio >= 0.99) {
+            const maxRam = ns.getServerMaxRam("home");
+            const usedRam = ns.getServerUsedRam("home")
+            var freeRam = maxRam - usedRam;
+            var shareThreads = Math.floor(freeRam / shareScriptRam);
+            if (shareThreads > 0) {
+                ns.print("INFO share threads " + shareThreads);
+                ns.exec(shareScriptName, "home", shareThreads, shareThreadIndex);
+                if (shareThreadIndex > 9){
+                    shareThreadIndex = 0;
+                }
+                else{
+                    shareThreadIndex++;
+                }
+                freeRams.overallFreeRam -= shareThreads * shareScriptRam;
+            }
         }
 
         // if lots of RAM to spare and money is not an issue, spam weak attacks for hacking XP gain
@@ -282,7 +314,7 @@ function manageAndHack(ns, freeRams, servers, targets, growStocks, hackStocks) {
                     //      so we could hack for more than * maxPercentage 
                     // => we leave a negligible small percentage of the RAM unused. 
 
-                    hackThreads = Math.floor(ns.hackAnalyzeThreads(target, reducedHackMoneyRatio * money))
+                    hackThreads = Math.floor(ns.hackAnalyzeThreads(target, reducedHackMoneyRatio * money));
 
                     //ns.print("Reduced hack threads: " + hackThreads)
                     addedHackSecurity = hackThreads * hackThreadSecurityIncrease;
@@ -309,8 +341,8 @@ function manageAndHack(ns, freeRams, servers, targets, growStocks, hackStocks) {
 
                     addedGrowSecurity = growThreads * growThreadSecurityIncrease;
                     weakThreads = Math.floor((secDiff + addedGrowSecurity) * 20);
-                    if (growThreads < 1 || weakThreads < 1) {
-                        // got divided and rounded down to zero due to low RAM
+                    if ((growThreads < 1 || weakThreads < 1) && secDiff < 0.5) {
+                        // not an attack to initially weaken and got divided and rounded down to zero due to low RAM
                         break;
                     }
                     // we have only enough RAM to partially grow this target
@@ -603,7 +635,10 @@ function getFreeRam(ns, servers) {
             overallFreeRam += freeRam;
         }
     }
+    // deploy threads on servers with lots of free RAM first
     serverRams.sort((a, b) => b.freeRam - a.freeRam);
+    // move home server to last position to keep RAM free for player stuff there
+    serverRams.sort((a, b) => (a.host == "home") - (b.host == "home"));
 
     return { serverRams, overallFreeRam, overallMaxRam };
 }

@@ -141,7 +141,7 @@ export async function main(ns) {
         shortStocks.add(sym);
       }
       const money = ns.getServerMoneyAvailable("home");
-      if (money > commission * 200) {
+      if (money > commission * 1000) {
         if (state > 0 && !sold) {
           const sharesToBuy = Math.min(ns.stock.getMaxShares(sym), Math.floor((money - commission) / askPrice));
           if (ns.stock.buy(sym, sharesToBuy) > 0) {

@@ -24,12 +24,14 @@ function tendStocks(ns) {
 
     var longStocks = new Set();
     var shortStocks = new Set();
+    var overallValue = 0;
 
     for (const stock of stocks) {
         if (stock.longShares > 0) {
             if (stock.forecast > 0.5) {
                 longStocks.add(stock.sym);
                 ns.print(`INFO ${stock.summary} LONG ${ns.nFormat(stock.cost + stock.profit, "0a")} ${ns.nFormat(100 * stock.profit / stock.cost, "0.00")}%`);
+                overallValue += (stock.cost + stock.profit);
             }
             else {
                 const salePrice = ns.stock.sell(stock.sym, stock.longShares);
@@ -45,6 +47,7 @@ function tendStocks(ns) {
             if (stock.forecast < 0.5) {
                 shortStocks.add(stock.sym);
                 ns.print(`INFO ${stock.summary} SHORT ${ns.nFormat(stock.cost + stock.profit, "0a")} ${ns.nFormat(100 * stock.profit / stock.cost, "0.00")}%`);
+                overallValue += (stock.cost + stock.profit);
             }
             else {
                 const salePrice = ns.stock.sellShort(stock.sym, stock.shortShares);
@@ -61,7 +64,7 @@ function tendStocks(ns) {
     for (const stock of stocks) {
         var money = ns.getPlayer().money;
         //ns.print(`INFO ${stock.summary}`);
-        if (stock.forecast > 0.57) {
+        if (stock.forecast > 0.55) {
             longStocks.add(stock.sym);
             //ns.print(`INFO ${stock.summary}`);
             if (money > 500 * commission) {
@@ -71,7 +74,7 @@ function tendStocks(ns) {
                 }
             }
         }
-        else if (stock.forecast < 0.43 && shortAvailable) {
+        else if (stock.forecast < 0.45 && shortAvailable) {
             shortStocks.add(stock.sym);
             //ns.print(`INFO ${stock.summary}`);
             if (money > 500 * commission) {
@@ -82,6 +85,7 @@ function tendStocks(ns) {
             }
         }
     }
+    ns.print("Stock value: " + ns.nFormat(overallValue, "$0a"));
 
     // send stock market manipulation orders to hack manager
     var growStockPort = ns.getPortHandle(1); // port 1 is grow
@@ -99,7 +103,7 @@ function tendStocks(ns) {
     }
 }
 
-function getAllStocks(ns) {
+export function getAllStocks(ns) {
     // make a lookup table of all stocks and all their properties
     const stockSymbols = ns.stock.getSymbols();
     const stocks = [];
@@ -119,14 +123,16 @@ function getAllStocks(ns) {
             maxShares: ns.stock.getMaxShares(sym),
         };
 
-        var longProfit = stock.longShares * ( stock.bidPrice - stock.longPrice ) - 2 * commission;
-        var shortProfit = stock.shortShares * ( stock.shortPrice - stock.askPrice ) - 2 * commission;
+        var longProfit = stock.longShares * (stock.bidPrice - stock.longPrice) - 2 * commission;
+        var shortProfit = stock.shortShares * (stock.shortPrice - stock.askPrice) - 2 * commission;
         stock.profit = longProfit + shortProfit;
         stock.cost = (stock.longShares * stock.longPrice) + (stock.shortShares * stock.shortPrice)
-        var profitPotential = 2 * Math.abs(stock.forecast - 0.5);
 
-        profitPotential *= (stock.volatility / 8);
+        // profit potential as chance for profit * effect of profit
+        var profitChance = 2 * Math.abs(stock.forecast - 0.5);
+        var profitPotential = profitChance * (stock.volatility);
         stock.profitPotential = profitPotential;
+
         stock.summary = `${stock.sym}: ${stock.forecast.toFixed(3)} ± ${stock.volatility.toFixed(3)}`;
         stocks.push(stock);
     }
