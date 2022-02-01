@@ -30,7 +30,7 @@ export async function main(ns) {
 		ns.print("companyName: " + player.companyName)
 		ns.print("jobs: " + JSON.stringify(player.jobs))
 		//ns.print("Corps to work for: " + getCorpsForReputation(factionsForReputation))
-
+		//ns.print("sleep for " + sleepTime + " ms")
 		await ns.sleep(sleepTime);
 	}
 }
@@ -59,13 +59,16 @@ function getPrograms(ns, player) {
 function chooseAction(ns, sleepTime, player, factions) {
 	const focus = ns.isFocused();
 
-	const crimeUntilMoney = 1000000000;
 	if (ns.getHackingLevel() < studyUntilHackLevel) {
 		ns.universityCourse("rothman university", "Study Computer Science", true);
 	}
 	else if (factions.size > 0) {
-		const wType = "Hacking Contracts";
-		var faction = factions.keys().next().value
+		var faction = factions.keys().next().value;
+		const factionsFieldWork = ["Slum Snakes"]
+		var wType = "Hacking Contracts";
+		if (factionsFieldWork.includes(faction)) {
+			wType = "Field Work";
+		}
 		const success = ns.workForFaction(faction, wType, focus);
 		if (success) {
 			ns.print("Start working for faction " + faction);
@@ -197,6 +200,7 @@ function hasNewAugments(ns, faction) {
 			if (ignoreFactionAugs.has(faction)) {
 				if (ignoreFactionAugs.get(faction) == augmentation) {
 					// ignore some augmentations which we want to buy from later factions
+					//ns.print("Ignore aug " + augmentation + " for faction " + faction)
 					continue;
 				}
 			}
@@ -224,49 +228,49 @@ function commitCrime(ns, player, combatStatsGoal = 75) {
 	// Calculate the risk value of all crimes
 	var bestCrime = "";
 	var bestCrimeValue = 0;
-	var crimeStats = {};
+	var bestCrimeStats = {};
 	for (let crime of crimes) {
 		let crimeChance = ns.getCrimeChance(crime);
-		crimeStats = ns.getCrimeStats(crime);
-		if (crime == "Assassination" && player.numPeopleKilled < 30 && crimeChance > 0.99) {
+		var crimeStats = ns.getCrimeStats(crime);
+		if (crime == "Assassination" && player.numPeopleKilled < 30 && crimeChance > 0.98) {
 			bestCrime = "Assassination";
 			break;
 		}
-		else if (crime == "Homicide" && player.numPeopleKilled < 30 && crimeChance > 0.99) {
+		else if (crime == "Homicide" && player.numPeopleKilled < 30 && crimeChance > 0.98) {
 			bestCrime = "Homicide";
 			break;
 		}
 		var crimeValue = 0;
 		if (player.strength < combatStatsGoal) {
-			crimeValue += 10 * crimeStats.strength_exp;
+			crimeValue += 100000 * crimeStats.strength_exp;
 		}
 		if (player.defense < combatStatsGoal) {
-			crimeValue += 10 * crimeStats.defense_exp;
+			crimeValue += 100000 * crimeStats.defense_exp;
 		}
 		if (player.dexterity < combatStatsGoal) {
-			crimeValue += 10 * crimeStats.dexterity_exp;
+			crimeValue += 100000 * crimeStats.dexterity_exp;
 		}
 		if (player.agility < combatStatsGoal) {
-			crimeValue += 10 * crimeStats.agility_exp;
+			crimeValue += 100000 * crimeStats.agility_exp;
 		}
 		crimeValue += crimeStats.money;
-
-		crimeValue = crimeValue * crimeChance / crimeStats.time;
+		//ns.print(ns.nFormat(crimeChance,"0.00a")+"/"+ns.nFormat(crimeStats.time,"000a")+"|"+crimeStats.strength_exp + "|" + crimeStats.defense_exp + "|" + crimeStats.dexterity_exp + "|" + crimeStats.agility_exp + "|" + ns.nFormat(crimeStats.money,"0a")+"|"+crime);
+		crimeValue = crimeValue * crimeChance / (crimeStats.time + 10);
 		if (crimeValue > bestCrimeValue) {
 			bestCrime = crime;
 			bestCrimeValue = crimeValue;
+			bestCrimeStats = crimeStats;
 		}
-		//ns.print(JSON.stringify(crimeStats));
 	}
 
 	ns.commitCrime(bestCrime);
 
-	ns.print("Crime value " + ns.nFormat(bestCrimeValue, "0a") + " (xp + $) / s");
-	return crimeStats.time;
+	ns.print("Crime value " + ns.nFormat(bestCrimeValue, "0a") + " for " + bestCrime);
+	return bestCrimeStats.time + 10;
 }
 
-var megaCorps = ["Clarke Incorporated", "OmniTek Incorporated", "NWO", "Fulcrum Technologies",
-	"ECorp", "MegaCorp", "KuaiGong International", "Four Sigma", "Blade Industries", "Bachman & Associates"];
+var megaCorps = ["Clarke Incorporated", "Bachman & Associates", "OmniTek Incorporated", "NWO", "Fulcrum Technologies", "Blade Industries",
+	"ECorp", "MegaCorp", "KuaiGong International", "Four Sigma"];
 
 var cityFactions = ["Sector-12", "Chongqing", "New Tokyo", "Ishima", "Aevum", "Volhaven"];
 
@@ -276,6 +280,7 @@ var crimes = ["Shoplift", "RobStore", "Mug", "Larceny", "Deal Drugs", "Bond Forg
 const ignoreFactionAugs = new Map([
 	["CyberSec", 'Cranial Signal Processors - Gen II'],
 	["NiteSec", 'DataJack'],
+	["The Black Hand", 'Embedded Netburner Module Core Implant'],
 	["Sector-12", 'Neuralstimulator'],
 ])
 
