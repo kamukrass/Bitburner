@@ -1,5 +1,4 @@
-
-const studyUntilHackLevel = 10;
+const studyUntilHackLevel = 50;
 
 /** @param {NS} ns **/
 export async function main(ns) {
@@ -57,14 +56,17 @@ function getPrograms(ns, player) {
 }
 
 function chooseAction(ns, sleepTime, player, factions) {
-	const focus = ns.isFocused();
+	var focus = ns.isFocused();
+	ns.print("Focus: " + focus);
+	// focus seems bugged? Set it to false
+	focus = false;
 
 	if (ns.getHackingLevel() < studyUntilHackLevel) {
-		ns.universityCourse("rothman university", "Study Computer Science", true);
+		ns.universityCourse("rothman university", "Study Computer Science", focus);
 	}
 	else if (factions.size > 0) {
 		var faction = factions.keys().next().value;
-		const factionsFieldWork = ["Slum Snakes"]
+		const factionsFieldWork = ["Slum Snakes", "Tetrads"];
 		var wType = "Hacking Contracts";
 		if (factionsFieldWork.includes(faction)) {
 			wType = "Field Work";
@@ -78,51 +80,34 @@ function chooseAction(ns, sleepTime, player, factions) {
 			ns.print("Could not perform intended action: " + faction + " -> " + wType);
 		}
 	}
-	else if (player.getHackingLevel >= 250) {
+	else if (player.hacking >= 250) {
 		var corpsToWorkFor = getCorpsForReputation(ns, factions);
-		//ns.print(corpsToWorkFor);
-		if (corpsToWorkFor.length > 0) {
-			if (player.jobs[corpsToWorkFor[0]] == null) {
-				const wType = "IT Intern";
-				ns.applyToCompany(corpsToWorkFor[0], wType);
-				ns.print("Applied for " + wType);
-				ns.toast("Applied for " + wType);
-				ns.workForCompany(corpsToWorkFor[0], focus);
-			}
-			else if (player.jobs[corpsToWorkFor[0]] == "IT Intern") {
-				const wType = "IT Analyst";
-				ns.applyToCompany(corpsToWorkFor[0], wType);
-				ns.print("Applied for " + wType);
-				ns.toast("Applied for " + wType);
-				ns.workForCompany(corpsToWorkFor[0], focus);
-			}
-			else if (player.jobs[corpsToWorkFor[0]] == "IT Analyst") {
-				const wType = "IT Manager";
-				ns.applyToCompany(corpsToWorkFor[0], wType);
-				ns.print("Applied for " + wType);
-				ns.toast("Applied for " + wType);
-				ns.workForCompany(corpsToWorkFor[0], focus);
-			}
-			else if (player.jobs[corpsToWorkFor[0]] == "IT Manager") {
-				const wType = "Systems Administrator";
-				ns.applyToCompany(corpsToWorkFor[0], wType);
-				ns.print("Applied for " + wType);
-				ns.toast("Applied for " + wType);
-				ns.workForCompany(corpsToWorkFor[0], focus);
-			}
-			//ns.print(corpsToWorkFor[0]);
-			if (player.workType != "Working for Company") {
-				ns.workForCompany(corpsToWorkFor[0], focus);
-				ns.print("Start working for " + corpsToWorkFor[0]);
-				ns.toast("Start working for " + corpsToWorkFor[0]);
-			}
-		}
+		//ns.print("Corps to work for: " + corpsToWorkFor);
+		applyForPromotion(ns, player, corpsToWorkFor[0]);
+		ns.print("Start working for " + corpsToWorkFor[0]);
+		ns.toast("Start working for " + corpsToWorkFor[0]);
+		ns.workForCompany(corpsToWorkFor[0], focus);
+
 	}
 	else if (focus) {
-		const crimeTime = commitCrime(ns, player);
+		var crimeTime = commitCrime(ns, player);
 		return crimeTime;
 	}
+	else {
+		ns.toast("Crime Time! Please focus on something to start crimes.", "warning");
+	}
 	return sleepTime;
+}
+
+function applyForPromotion(ns, player, corp) {
+
+	var career = "it"
+
+	var success = ns.applyToCompany(corp, career);
+
+	if (success) {
+		ns.toast("Got a company promotion!");
+	}
 }
 
 function currentActionUseful(ns, player, factions) {
@@ -132,10 +117,15 @@ function currentActionUseful(ns, player, factions) {
 			var repRemaining = factions.get(player.currentWorkFactionName) - player.workRepGained;
 			if (repRemaining > 0) {
 				// working for a faction needing more reputation for augmentations
-				if (playerControlPort.empty()) {
+				if (playerControlPort.empty() && player.currentWorkFactionDescription == "carrying out hacking contracts") {
 					// only write to ports if empty
+					ns.print("ns.share() to increase faction reputation");
 					playerControlPort.write(true);
 
+				}
+				else if (playerControlPort.empty()) {
+					// only write to ports if empty
+					playerControlPort.write(false);
 				}
 				// seems a cycle is .2 ms, so RepGainRate * 5 is gain per second
 				var reputationTimeRemaining = repRemaining / (player.workRepGainRate * 5);
@@ -149,14 +139,31 @@ function currentActionUseful(ns, player, factions) {
 			}
 		}
 		else {
-			return false;
+			if (playerControlPort.empty()) {
+				// only write to ports if empty
+				playerControlPort.write(false);
+			}
+
 		}
+
 	}
 	else { // not hacking for a faction
 		if (playerControlPort.empty()) {
 			// only write to ports if empty
 			playerControlPort.write(false);
 		}
+	}
+	if (player.workType == "Working for Company") {
+		var reputationGoal = 266667; // 200 but some is lost when stop working
+		// ToDo: except fulcrum + 66.666 k
+		
+		var reputation = ns.getCompanyRep(player.companyName) + player.workRepGained;
+		ns.print("Company reputation: " + ns.nFormat(reputation, "0a"));
+		if (reputation > reputationGoal) {
+			return false;
+		}
+		applyForPromotion(ns, player, player.companyName);
+		return true;
 	}
 	if (player.workType == "Studying or Taking a class at university") {
 		if (player.getHackingLevel < studyUntilHackLevel) {
@@ -224,7 +231,7 @@ function joinFactions(ns) {
 	}
 }
 
-function commitCrime(ns, player, combatStatsGoal = 75) {
+function commitCrime(ns, player, combatStatsGoal = 300) {
 	// Calculate the risk value of all crimes
 	var bestCrime = "";
 	var bestCrimeValue = 0;
@@ -234,10 +241,12 @@ function commitCrime(ns, player, combatStatsGoal = 75) {
 		var crimeStats = ns.getCrimeStats(crime);
 		if (crime == "Assassination" && player.numPeopleKilled < 30 && crimeChance > 0.98) {
 			bestCrime = "Assassination";
+			bestCrimeStats = crimeStats;
 			break;
 		}
 		else if (crime == "Homicide" && player.numPeopleKilled < 30 && crimeChance > 0.98) {
 			bestCrime = "Homicide";
+			bestCrimeStats = crimeStats;
 			break;
 		}
 		var crimeValue = 0;
@@ -269,7 +278,7 @@ function commitCrime(ns, player, combatStatsGoal = 75) {
 	return bestCrimeStats.time + 10;
 }
 
-var megaCorps = ["Clarke Incorporated", "Bachman & Associates", "OmniTek Incorporated", "NWO", "Fulcrum Technologies", "Blade Industries",
+var megaCorps = ["Clarke Incorporated", "Bachman & Associates", "OmniTek Incorporated", "NWO", "Fulcrum Secret Technologies", "Blade Industries",
 	"ECorp", "MegaCorp", "KuaiGong International", "Four Sigma"];
 
 var cityFactions = ["Sector-12", "Chongqing", "New Tokyo", "Ishima", "Aevum", "Volhaven"];
@@ -296,5 +305,4 @@ DeepscanV2.exe: 400
 ServerProfiler.exe: 75
 AutoLink.exe: 25
 
-work faction: 266.667 rep required if hacked ++ except fulcrum + 66.666 k
 */
