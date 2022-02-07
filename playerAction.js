@@ -13,6 +13,10 @@ export async function main(ns) {
 
 		joinFactions(ns);
 
+		buyAugments(ns, player);
+
+		upgradeHomeServer(ns, player);
+
 		var factionsForReputation = getFactionsForReputation(ns, player);
 		ns.print("Factions for Reputation: " + [...factionsForReputation.keys()]);
 
@@ -31,6 +35,23 @@ export async function main(ns) {
 		//ns.print("Corps to work for: " + getCorpsForReputation(factionsForReputation))
 		//ns.print("sleep for " + sleepTime + " ms")
 		await ns.sleep(sleepTime);
+	}
+}
+
+function upgradeHomeServer(ns, player) {
+	//if (!player.has4SDataTixApi && player.money > 30e9) {
+	// TODO: Consider moving this to the trading script, fits better there (and saves ram here)
+	// ns.purchase4SMarketDataTixApi();
+	//}
+	if (player.money > ns.getUpgradeHomeRamCost()) {
+		if (!player.factions.includes("CyberSec") || ns.getUpgradeHomeRamCost() < 2e9
+			|| (player.has4SDataTixApi && ns.getUpgradeHomeRamCost() < 0.2 * player.money)) {
+			// Upgrade slowly in the first run while we save money for 4S or the first batch of augmentations
+			// Assumption: We wont't join Cybersec after the first run anymore
+			ns.print("Upgraded Home Server RAM");
+			ns.toast("Upgraded Home Server RAM");
+			ns.upgradeHomeRam();
+		}
 	}
 }
 
@@ -153,10 +174,13 @@ function currentActionUseful(ns, player, factions) {
 			playerControlPort.write(false);
 		}
 	}
-	if (player.workType == "Working for Company") {
+	if (player.workType == "Working for Company" && player.companyName != "") {
+		// for unknown reasons it might happen to have the work type "working for company" without actually working for one
+		// just to make sure, also check that we have a company.
+
 		var reputationGoal = 266667; // 200 but some is lost when stop working
 		// ToDo: except fulcrum + 66.666 k
-		
+
 		var reputation = ns.getCompanyRep(player.companyName) + player.workRepGained;
 		ns.print("Company reputation: " + ns.nFormat(reputation, "0a"));
 		if (reputation > reputationGoal) {
@@ -177,7 +201,7 @@ function getFactionsForReputation(ns, player) {
 
 	var factionsWithAugmentations = new Map();
 	for (const faction of player.factions) {
-		var maxReputationRequired = hasNewAugments(ns, faction);
+		var maxReputationRequired = maxAugmentRep(ns, faction);
 		if (ns.getFactionRep(faction) < maxReputationRequired) {
 			factionsWithAugmentations.set(faction, maxReputationRequired - ns.getFactionRep(faction));
 		}
@@ -188,14 +212,78 @@ function getFactionsForReputation(ns, player) {
 function getCorpsForReputation(ns, factions) {
 	var corpsWithoutFaction = []
 	for (const corp of megaCorps) {
-		if (!factions.has(corp) && hasNewAugments(ns, corp) > 0) {
+		if (!factions.has(corp) && maxAugmentRep(ns, corp) > 0) {
 			corpsWithoutFaction.push(corp);
 		}
 	}
 	return corpsWithoutFaction;
 }
 
-function hasNewAugments(ns, faction) {
+function buyAugments(ns, player) {
+
+	var sortedAugmentations = [];
+
+	for (const faction of player.factions) {
+		var purchasedAugmentations = ns.getOwnedAugmentations(true);
+		var augmentations = ns.getAugmentationsFromFaction(faction);
+		var newAugmentations = augmentations.filter(val => !purchasedAugmentations.includes(val));
+		for (const augmentation of newAugmentations) {
+			if (ns.getAugmentationRepReq(augmentation) <= ns.getFactionRep(faction)) {
+				sortedAugmentations.push([augmentation, ns.getAugmentationPrice(augmentation)]);
+			}
+		}
+	}
+
+	// costs are the second element in the 2d arrays
+	sortedAugmentations.sort((a, b) => b[1] - a[1]);
+	var augmentationCostMultiplier = 1;
+	var preReqAugments = [];
+	var overallAugmentationCost = 0;
+	for (var i = 0; i < sortedAugmentations.length; i++) {
+		if (preReqAugments.includes(sortedAugmentations[i][0])) {
+			//ns.print("remove prereq aug: " + sortedAugmentations[i][0]);
+			sortedAugmentations.splice(i, 1);
+			i--;
+			continue;
+		}
+		else if (i > 0 && sortedAugmentations[i][0] == sortedAugmentations[i - 1][0]) {
+			//ns.print("remove duplicate aug: " + sortedAugmentations[i][0]);
+			sortedAugmentations.splice(i, 1);
+			i--;
+			continue;
+		}
+
+		if (ns.getAugmentationPrereq(sortedAugmentations[i][0]).length > 0) {
+			var preReqAug = ns.getAugmentationPrereq(sortedAugmentations[i][0])[0];
+			preReqAugments.push(preReqAug);
+			//ns.print("move prereq aug: " + preReqAug[0] + " before " + sortedAugmentations[i][0]);
+			sortedAugmentations.splice(i, 0, [preReqAug, ns.getAugmentationPrice(preReqAug)]);
+			overallAugmentationCost += sortedAugmentations[i][1] * augmentationCostMultiplier;
+			i++;
+			augmentationCostMultiplier *= 2;
+
+			if (ns.getAugmentationPrereq(sortedAugmentations[i][0]).length > 1) {
+				// Assumption: we do not make big runs where there are multiple prerequisites. Else, we might get a problem.
+				ns.print("ERROR Multiple augmentation prerequisites cannot be handeled yet");
+			}
+		}
+
+		overallAugmentationCost += sortedAugmentations[i][1] * augmentationCostMultiplier;
+		augmentationCostMultiplier *= 2;
+	}
+
+	//ns.print("Augmentation purchase order: " + sortedAugmentations)
+	ns.print("Current augmentation purchase cost: " + ns.nFormat(overallAugmentationCost, "0.0a"));
+
+	if (player.money > overallAugmentationCost) {
+		// decide when it's time to install
+		// buy augmentation list
+		// buy flux governors
+		// ns.installAugmentations(cbScript)
+	}
+}
+
+function maxAugmentRep(ns, faction) {
 	var purchasedAugmentations = ns.getOwnedAugmentations(true);
 	var augmentations = ns.getAugmentationsFromFaction(faction);
 	var newAugmentations = augmentations.filter(val => !purchasedAugmentations.includes(val));
@@ -224,7 +312,7 @@ function hasNewAugments(ns, faction) {
 function joinFactions(ns) {
 	const newFactions = ns.checkFactionInvitations();
 	for (const faction of newFactions) {
-		if (!cityFactions.includes(faction) && hasNewAugments(ns, faction)) {
+		if (!cityFactions.includes(faction) && maxAugmentRep(ns, faction)) {
 			ns.joinFaction(faction);
 			ns.print("Joined " + faction);
 		}
@@ -233,6 +321,10 @@ function joinFactions(ns) {
 
 function commitCrime(ns, player, combatStatsGoal = 300) {
 	// Calculate the risk value of all crimes
+
+	ns.print("Karma: " + ns.heart.break());
+	ns.print("Kills: " + player.numPeopleKilled);
+
 	var bestCrime = "";
 	var bestCrimeValue = 0;
 	var bestCrimeStats = {};
@@ -294,6 +386,7 @@ const ignoreFactionAugs = new Map([
 ])
 
 /*
+TODO: Implement creating programs manual in the first run
 createProgram()
 BruteSSH.exe: 50
 FTPCrack.exe: 100
@@ -304,5 +397,4 @@ DeepscanV1.exe: 75
 DeepscanV2.exe: 400
 ServerProfiler.exe: 75
 AutoLink.exe: 25
-
 */
