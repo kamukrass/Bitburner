@@ -78,9 +78,7 @@ function getPrograms(ns, player) {
 
 function chooseAction(ns, sleepTime, player, factions) {
 	var focus = ns.isFocused();
-	ns.print("Focus: " + focus);
-	// focus seems bugged? Set it to false
-	focus = false;
+	// ns.print("Focus: " + focus);
 
 	if (ns.getHackingLevel() < studyUntilHackLevel) {
 		ns.universityCourse("rothman university", "Study Computer Science", focus);
@@ -127,7 +125,7 @@ function applyForPromotion(ns, player, corp) {
 	if (success) {
 		ns.toast("Got a company promotion!");
 	}
-	ns.workForCompany(corp, false);
+	ns.workForCompany(corp, ns.isFocused());
 }
 
 function currentActionUseful(ns, player, factions) {
