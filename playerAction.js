@@ -107,8 +107,6 @@ function chooseAction(ns, sleepTime, player, factions) {
 		applyForPromotion(ns, player, corpsToWorkFor[0]);
 		ns.print("Start working for " + corpsToWorkFor[0]);
 		ns.toast("Start working for " + corpsToWorkFor[0]);
-		ns.workForCompany(corpsToWorkFor[0], focus);
-
 	}
 	else if (focus) {
 		var crimeTime = commitCrime(ns, player);
@@ -129,6 +127,7 @@ function applyForPromotion(ns, player, corp) {
 	if (success) {
 		ns.toast("Got a company promotion!");
 	}
+	ns.workForCompany(corp, false);
 }
 
 function currentActionUseful(ns, player, factions) {
@@ -179,7 +178,7 @@ function currentActionUseful(ns, player, factions) {
 		// just to make sure, also check that we have a company.
 
 		var reputationGoal = 266667; // 200 but some is lost when stop working
-		// ToDo: except fulcrum + 66.666 k
+		// ToDo: except fulcrum + 66.666 k and bachman not hacked
 
 		var reputation = ns.getCompanyRep(player.companyName) + player.workRepGained;
 		ns.print("Company reputation: " + ns.nFormat(reputation, "0a"));
@@ -190,7 +189,7 @@ function currentActionUseful(ns, player, factions) {
 		return true;
 	}
 	if (player.workType == "Studying or Taking a class at university") {
-		if (player.getHackingLevel < studyUntilHackLevel) {
+		if (ns.getHackingLevel() < studyUntilHackLevel) {
 			return true;
 		}
 	}
@@ -238,41 +237,40 @@ function buyAugments(ns, player) {
 	sortedAugmentations.sort((a, b) => b[1] - a[1]);
 	var augmentationCostMultiplier = 1;
 	var preReqAugments = [];
+	var skipAugments = [];
 	var overallAugmentationCost = 0;
 	for (var i = 0; i < sortedAugmentations.length; i++) {
-		if (preReqAugments.includes(sortedAugmentations[i][0])) {
-			//ns.print("remove prereq aug: " + sortedAugmentations[i][0]);
-			sortedAugmentations.splice(i, 1);
-			i--;
-			continue;
-		}
-		else if (i > 0 && sortedAugmentations[i][0] == sortedAugmentations[i - 1][0]) {
-			//ns.print("remove duplicate aug: " + sortedAugmentations[i][0]);
-			sortedAugmentations.splice(i, 1);
-			i--;
-			continue;
-		}
 
-		if (ns.getAugmentationPrereq(sortedAugmentations[i][0]).length > 0) {
-			var preReqAug = ns.getAugmentationPrereq(sortedAugmentations[i][0])[0];
-			preReqAugments.push(preReqAug);
-			//ns.print("move prereq aug: " + preReqAug[0] + " before " + sortedAugmentations[i][0]);
-			sortedAugmentations.splice(i, 0, [preReqAug, ns.getAugmentationPrice(preReqAug)]);
-			overallAugmentationCost += sortedAugmentations[i][1] * augmentationCostMultiplier;
-			i++;
-			augmentationCostMultiplier *= 2;
 
-			if (ns.getAugmentationPrereq(sortedAugmentations[i][0]).length > 1) {
-				// Assumption: we do not make big runs where there are multiple prerequisites. Else, we might get a problem.
-				ns.print("ERROR Multiple augmentation prerequisites cannot be handeled yet");
+		for (var preReqAug of ns.getAugmentationPrereq(sortedAugmentations[i][0])) {
+			if (!preReqAugments.includes(preReqAug) && !purchasedAugmentations.includes(preReqAug)) {
+				preReqAugments.push(preReqAug);
+				ns.print("move prereq aug: " + preReqAug + " before " + sortedAugmentations[i][0]);
+				sortedAugmentations.splice(i, 0, [preReqAug, ns.getAugmentationPrice(preReqAug)]);
+				//overallAugmentationCost += sortedAugmentations[i][1] * augmentationCostMultiplier;
+				if (i >= 0) {
+					i--;
+				}
+				//augmentationCostMultiplier *= 2;
 			}
 		}
-
-		overallAugmentationCost += sortedAugmentations[i][1] * augmentationCostMultiplier;
-		augmentationCostMultiplier *= 2;
+		if (i >= 0) {
+			if (i > 0 && sortedAugmentations[i][0] == sortedAugmentations[i - 1][0] || skipAugments.includes(sortedAugmentations[i][0])) {
+				//ns.print("remove duplicate aug: " + sortedAugmentations[i][0]);
+				sortedAugmentations.splice(i, 1);
+				i--;
+				continue;
+			}
+			else if (preReqAugments.includes(sortedAugmentations[i][0])) {
+				//ns.print("skip prereq aug: " + sortedAugmentations[i][0]);
+				skipAugments.push((sortedAugmentations[i][0]));
+			}
+			overallAugmentationCost += sortedAugmentations[i][1] * augmentationCostMultiplier;
+			augmentationCostMultiplier *= 2;
+		}
 	}
 
-	//ns.print("Augmentation purchase order: " + sortedAugmentations)
+	ns.print("Augmentation purchase order: " + sortedAugmentations)
 	ns.print("Current augmentation purchase cost: " + ns.nFormat(overallAugmentationCost, "0.0a"));
 
 	if (player.money > overallAugmentationCost) {
@@ -370,7 +368,7 @@ function commitCrime(ns, player, combatStatsGoal = 300) {
 	return bestCrimeStats.time + 10;
 }
 
-var megaCorps = ["Clarke Incorporated", "Bachman & Associates", "OmniTek Incorporated", "NWO", "Fulcrum Secret Technologies", "Blade Industries",
+var megaCorps = ["Clarke Incorporated", "OmniTek Incorporated", "NWO", "Bachman & Associates", "Fulcrum Secret Technologies", "Blade Industries",
 	"ECorp", "MegaCorp", "KuaiGong International", "Four Sigma"];
 
 var cityFactions = ["Sector-12", "Chongqing", "New Tokyo", "Ishima", "Aevum", "Volhaven"];
