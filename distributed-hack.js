@@ -270,6 +270,9 @@ function manageAndHack(ns, freeRams, servers, targets, growStocks, hackStocks) {
             // multiply the initial grow ratio by the expected new grow ratio needed after hack
             overallGrowRatio = initialGrowRatio * hackReGrowRatio;
 
+            // compensate reduced grow effect in HGW after H due to security increase
+            overallGrowRatio *= (sec + addedHackSecurity) / sec;
+
             // Considering 0 cores on all serers. 
             // The last parameter 0 can be removed if optimizing for running slave threads on home server with > 0 cores only
             // else, grow threads onother servers than home will not grow sufficiently and break perfect attack chains
@@ -340,9 +343,9 @@ function manageAndHack(ns, freeRams, servers, targets, growStocks, hackStocks) {
 
                     weakThreads = Math.floor((secDiff + addedGrowSecurity + addedHackSecurity) * 20);
                     //if (hackThreads < 1 || weakThreads < 1) {
-                        // we planned to hack but we have so small free RAM that it got divided and rounded down to zero 
-                        // abort to not waste resources
-                        //return;
+                    // we planned to hack but we have so small free RAM that it got divided and rounded down to zero 
+                    // abort to not waste resources
+                    //return;
                     //}
 
                     if (partialWeakGrow == target) {
@@ -357,6 +360,7 @@ function manageAndHack(ns, freeRams, servers, targets, growStocks, hackStocks) {
 
                     addedGrowSecurity = growThreads * growThreadSecurityIncrease;
                     weakThreads = Math.floor((secDiff + addedGrowSecurity) * 20);
+
                     if ((growThreads < 1 || weakThreads < 1) && secDiff < 0.5) {
                         // not an attack to initially weaken and got divided and rounded down to zero due to low RAM
                         break;
@@ -486,6 +490,12 @@ function manageAndHack(ns, freeRams, servers, targets, growStocks, hackStocks) {
         }
 
         for (var i = 0; i < parallelAttacks; i++) {
+            if (hackThreads > 0) {
+                if (!findPlaceToRun(ns, hackScriptName, hackThreads, freeRams.serverRams, target, hackSleep, hackStock)) {
+                    ns.print("WARN Did not find a place to run hack " + target + " needs " + overallRamNeed)
+                    return;
+                }
+            }
             if (weakThreads > 0) {
                 if (!findPlaceToRun(ns, weakenScriptName, weakThreads, freeRams.serverRams, target, weakSleep)) {
                     ns.print("WARN Did not find a place to run weaken " + target + " needs " + overallRamNeed)
@@ -495,13 +505,6 @@ function manageAndHack(ns, freeRams, servers, targets, growStocks, hackStocks) {
             if (growThreads > 0) {
                 if (!findPlaceToRun(ns, growScriptName, growThreads, freeRams.serverRams, target, growSleep, growStock)) {
                     ns.print("WARN Did not find a place to run grow " + target + " needs " + overallRamNeed)
-                    return;
-                }
-            }
-            if (hackThreads > 0) {
-
-                if (!findPlaceToRun(ns, hackScriptName, hackThreads, freeRams.serverRams, target, hackSleep, hackStock)) {
-                    ns.print("WARN Did not find a place to run hack " + target + " needs " + overallRamNeed)
                     return;
                 }
             }
@@ -634,9 +637,9 @@ function getHackable(ns, servers) {
 
     var sortedServers = [...servers.values()].filter(server => ns.getServerMaxMoney(server) > 100000
         && ns.getServerRequiredHackingLevel(server) <= ns.getHackingLevel()
-        && ns.getServerGrowth(server) > 1).sort((a, b) =>
+        && ns.getServerGrowth(server) > 1 && server != "n00dles").sort((a, b) =>
             profitsm.get(b) - profitsm.get(a))
-    if (partialWeakGrow != null){
+    if (partialWeakGrow != null) {
         // prioritize a server which we have not initialized yet
         sortedServers.unshift(partialWeakGrow);
     }

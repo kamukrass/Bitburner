@@ -6,6 +6,7 @@ export async function main(ns) {
 
 	while (true) {
 		ns.print("");
+
 		var sleepTime = 5000;
 		var player = ns.getPlayer();
 
@@ -78,7 +79,7 @@ function getPrograms(ns, player) {
 
 function chooseAction(ns, sleepTime, player, factions) {
 	var focus = ns.isFocused();
-	// ns.print("Focus: " + focus);
+	//ns.print("Focus: " + focus);
 
 	if (ns.getHackingLevel() < studyUntilHackLevel) {
 		ns.universityCourse("rothman university", "Study Computer Science", focus);
@@ -175,12 +176,12 @@ function currentActionUseful(ns, player, factions) {
 		// for unknown reasons it might happen to have the work type "working for company" without actually working for one
 		// just to make sure, also check that we have a company.
 
-		var reputationGoal = 266667; // 200 but some is lost when stop working
+		var reputationGoal = 200000; // 200 but some is lost when stop working ; 266667 
 		// ToDo: except fulcrum + 66.666 k and bachman not hacked
 
-		var reputation = ns.getCompanyRep(player.companyName) + player.workRepGained;
+		var reputation = ns.getCompanyRep(player.companyName) + (player.workRepGained * 3/4);
 		ns.print("Company reputation: " + ns.nFormat(reputation, "0a"));
-		if (reputation > reputationGoal) {
+		if (factions.has(player.companyName)) {
 			return false;
 		}
 		applyForPromotion(ns, player, player.companyName);
@@ -366,7 +367,7 @@ function commitCrime(ns, player, combatStatsGoal = 300) {
 	return bestCrimeStats.time + 10;
 }
 
-var megaCorps = ["Clarke Incorporated", "OmniTek Incorporated", "NWO", "Bachman & Associates", "Fulcrum Secret Technologies", "Blade Industries",
+var megaCorps = ["Clarke Incorporated", "Bachman & Associates", "OmniTek Incorporated", "NWO", "Fulcrum Secret Technologies", "Blade Industries",
 	"ECorp", "MegaCorp", "KuaiGong International", "Four Sigma"];
 
 var cityFactions = ["Sector-12", "Chongqing", "New Tokyo", "Ishima", "Aevum", "Volhaven"];
