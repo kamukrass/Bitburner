@@ -8,6 +8,7 @@ export async function main(ns) {
 	var corp = ns.corporation.getCorporation();
 	if (corp.divisions.length < 1) {
 		// initial Software Company setup
+		// TODO: Switch from Software to Tobacco as initial division
 		ns.corporation.expandIndustry("Software", "Software");
 		ns.corporation.unlockUpgrade("Smart Supply");
 		corp = ns.corporation.getCorporation();
@@ -24,13 +25,9 @@ export async function main(ns) {
 
 		corp = ns.corporation.getCorporation();
 		for (const division of corp.divisions) {
-			if (division.name == "Mining"){
-				continue;
-			}
+
 			ns.print("Division " + division.name);
-			if (division.name == "Healthcare" || division.name == "Software" || division.name == "Robotics" || division.name == "Tobacco" || division.name == "Food") {
-				await upgradeHealth(ns, division);
-			}
+			await upgradeHealth(ns, division);
 			newProduct(ns, division);
 			doResearch(ns, division);
 		}
@@ -45,6 +42,7 @@ export async function main(ns) {
 
 async function upgradeHealth(ns, division, productCity = "Sector-12") {
 	for (const city of cities) {
+		// check if warehouses are near max capacity and upgrade if needed
 		var cityWarehouse = ns.corporation.getWarehouse(division.name, city);
 		if (cityWarehouse.sizeUsed > 0.9 * cityWarehouse.size) {
 			if (ns.corporation.getCorporation().funds > ns.corporation.getUpgradeWarehouseCost(division.name, city)) {
@@ -54,9 +52,9 @@ async function upgradeHealth(ns, division, productCity = "Sector-12") {
 		}
 	}
 
+	// Hire emnployees
 	var employees = ns.corporation.getOffice(division.name, productCity).employees.length;
-	while (ns.corporation.getCorporation().funds > (cities.length * ns.corporation.getOfficeSizeUpgradeCost(division.name, productCity, 3))
-		&& employees < 5000) {
+	while (ns.corporation.getCorporation().funds > (cities.length * ns.corporation.getOfficeSizeUpgradeCost(division.name, productCity, 3))) {
 		ns.print("Upgrade office size for " + division.name);
 		for (const city of cities) {
 			ns.corporation.upgradeOfficeSize(division.name, city, 3);
@@ -66,9 +64,11 @@ async function upgradeHealth(ns, division, productCity = "Sector-12") {
 		}
 	}
 	if (ns.corporation.getOffice(division.name, productCity).employees.length > employees) {
+		// set jobs after hiring people just in case we hire lots of people at once and setting jobs seems slow
 		for (const city of cities) {
 			employees = ns.corporation.getOffice(division.name, city).employees.length;
 			if (ns.corporation.hasResearched(division.name, "Market-TA.II")) {
+				// TODO: Simplify here. ProductCity config can always be used
 				if (city == productCity) {
 					await ns.corporation.setAutoJobAssignment(division.name, city, "Operations", Math.ceil(employees / 5));
 					await ns.corporation.setAutoJobAssignment(division.name, city, "Engineer", Math.ceil(employees / 5));
@@ -101,6 +101,8 @@ async function upgradeHealth(ns, division, productCity = "Sector-12") {
 			}
 		}
 	}
+
+	// TODO: Upgrades need to be better automated; just an initial setup up to now. Move into a separate function and add some dynamic prioritization.
 	while (ns.corporation.getCorporation().funds > ns.corporation.getUpgradeLevelCost("Project Insight")
 		&& ns.corporation.getUpgradeLevel("Project Insight") < 20) {
 		ns.print("Upgrade Project Insight to " + (ns.corporation.getUpgradeLevel("Project Insight") + 1));
@@ -145,6 +147,7 @@ async function trickInvest(ns, division) {
 	}
 	var softwareProducts = division.products;
 	for (var product of softwareProducts) {
+		// stop selling products
 		ns.corporation.sellProduct(division.name, "Sector-12", product, "0", "MP", true);
 	}
 	while (ns.corporation.getHireAdVertCount(division.name) < 9
@@ -152,8 +155,8 @@ async function trickInvest(ns, division) {
 		ns.corporation.hireAdVert(division.name);
 	}
 	var refWarehouse = ns.corporation.getWarehouse(division.name, "Volhaven");
-	ns.print("Waiting for warehouses to fill up")
-	ns.print("Warehouse usage: " + refWarehouse.sizeUsed + " of " + refWarehouse.size);
+	ns.print("Wait for warehouses to fill up")
+	//ns.print("Warehouse usage: " + refWarehouse.sizeUsed + " of " + refWarehouse.size);
 	while (ns.corporation.getWarehouse(division.name, "Volhaven").sizeUsed <= (0.95 * refWarehouse.size)) {
 		await ns.sleep(5000);
 	}
@@ -162,27 +165,31 @@ async function trickInvest(ns, division) {
 	var initialInvestFunds = ns.corporation.getInvestmentOffer().funds;
 	ns.print("Initial investmant offer: " + initialInvestFunds);
 	for (const city of cities) {
+		// put all employees into business to sell as much as possible 
 		const employees = ns.corporation.getOffice(division.name, city).employees.length;
 		await ns.corporation.setAutoJobAssignment(division.name, city, "Operations", 0);
 		await ns.corporation.setAutoJobAssignment(division.name, city, "Engineer", 0);
-		await ns.corporation.setAutoJobAssignment(division.name, city, "Management", 1);
+		await ns.corporation.setAutoJobAssignment(division.name, city, "Management", 0);
 		await ns.corporation.setAutoJobAssignment(division.name, city, "Research & Development", 0);
-		await ns.corporation.setAutoJobAssignment(division.name, city, "Business", (employees - 1));
+		await ns.corporation.setAutoJobAssignment(division.name, city, "Business", (employees));
 	}
 	for (const city of cities) {
 		ns.corporation.sellMaterial(division.name, city, "AI Cores", "MAX", "MP");
 	}
 	for (var product of softwareProducts) {
+		// sell products again
 		ns.corporation.sellProduct(division.name, "Sector-12", product, "MAX", "MP", true);
 	}
 
 	while (ns.corporation.getInvestmentOffer().funds < (4 * initialInvestFunds)) {
+		// wait until the stored products are sold, which should lead to huge investment offers
 		await ns.sleep(200);
 	}
 	ns.print("Accept investment offer for " + ns.corporation.getInvestmentOffer().funds)
 	ns.corporation.acceptInvestmentOffer();
 
 	for (const city of cities) {
+		// set employees back to normal operation
 		const employees = ns.corporation.getOffice(division.name, city).employees.length;
 		await ns.corporation.setAutoJobAssignment(division.name, city, "Business", 0);
 		if (city == "Sector-12") {
@@ -197,12 +204,15 @@ async function trickInvest(ns, division) {
 			await ns.corporation.setAutoJobAssignment(division.name, city, "Research & Development", (employees - 2));
 		}
 	}
+
+	// with gained money, expand to the most profitable division
 	ns.corporation.expandIndustry("Healthcare", "Healthcare");
 	await initCities(ns, ns.corporation.getCorporation().divisions[1]);
 
 }
 
 function doResearch(ns, division) {
+	// TODO: This function is an ugly copy & paste mess... put research + factors into an array and loop over it.
 	const laboratory = "Hi-Tech R&D Laboratory"
 	const marketTAI = "Market-TA.I";
 	const marketTAII = "Market-TA.II";
@@ -320,8 +330,8 @@ function newProduct(ns, division) {
 		}
 	}
 
-	//softwareProducts.sort();
 	var numProducts = 3;
+	// amount of products which can be sold in parallel is 3; can be upgraded
 	if (ns.corporation.hasResearched(division.name, "uPgrade: Capacity.I")) {
 		numProducts++;
 		if (ns.corporation.hasResearched(division.name, "uPgrade: Capacity.II")) {
@@ -330,12 +340,14 @@ function newProduct(ns, division) {
 	}
 
 	if (productNumbers.length > numProducts) {
+		// discontinue the oldest product if over max amount of products
 		ns.print("Discontinue product " + softwareProducts[0]);
 		ns.corporation.discontinueProduct(division.name, softwareProducts[0]);
 	}
-	//productNumbers.sort();
+
+	// get the product number of the latest product and increase it by 1 for the mext product. Product names must be unique. 
 	var newProductNumber = parseInt(productNumbers[productNumbers.length - 1]) + 1;
-	ns.print("New Product number before cap: " + newProductNumber)
+	// cap product numbers to one digit and restart at 0 if > 9.
 	if (newProductNumber > 9) {
 		newProductNumber = 0;
 	}
@@ -346,7 +358,7 @@ function newProduct(ns, division) {
 
 async function initCities(ns, division, productCity = "Sector-12") {
 	for (const city of cities) {
-		ns.print("Expand City " + city + " division " + division.name);
+		ns.print("Expand " + division.name +  " to City " + city);
 		if (!division.cities.includes(city)) {
 			ns.corporation.expandCity(division.name, city);
 			ns.corporation.purchaseWarehouse(division.name, city);
@@ -365,6 +377,7 @@ async function initCities(ns, division, productCity = "Sector-12") {
 		ns.corporation.upgradeWarehouse(division.name, city);
 	}
 
+	// get more employees in the main product development city
 	const newEmployees = 6;
 	ns.corporation.upgradeOfficeSize(division.name, productCity, newEmployees);
 	for (var i = 0; i < newEmployees; i++) {
