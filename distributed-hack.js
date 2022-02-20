@@ -152,28 +152,29 @@ export async function main(ns) {
         }
 
         // Main logic sits here, determine whether or not and how many threads we should call weaken, grow and hack
-        manageAndHack(ns, freeRams, servers, targets, growStocks, hackStocks);
+        var attackLaunched = manageAndHack(ns, freeRams, servers, targets, growStocks, hackStocks);
 
-        // Adjust hackMoneyRatio
-        ramUsage = (freeRams.overallMaxRam - freeRams.overallFreeRam) / freeRams.overallMaxRam;
-        if (partialAttacks == 0 && ramUsage < 0.95 && hackMoneyRatio < 0.99) {
-            hackMoneyRatio += (1 - hackMoneyRatio) * (1 - ramUsage);
-            if (hackMoneyRatio > 0.99) {
-                hackMoneyRatio = 0.99;
+        if (attackLaunched) {
+            // Adjust hackMoneyRatio
+            ramUsage = (freeRams.overallMaxRam - freeRams.overallFreeRam) / freeRams.overallMaxRam;
+            //ns.print("Partial attacks: " + partialAttacks);
+            //ns.print("RAM usage: " + ramUsage);
+            if (partialAttacks == 0 && ramUsage < 0.95 && hackMoneyRatio < 0.99) {
+                hackMoneyRatio += (1 - hackMoneyRatio) * (1 - ramUsage);
+                if (hackMoneyRatio > 0.99) {
+                    hackMoneyRatio = 0.99;
+                }
+                ns.print("INFO increase hack money ratio to: " + hackMoneyRatio.toFixed(2));
             }
-            ns.print("INFO increase hack money ratio to: " + hackMoneyRatio.toFixed(2));
-        }
-        else if (partialAttacks > 4 && ramUsage > 0.99 && hackMoneyRatio > 0.01) {
-            hackMoneyRatio -= hackMoneyRatio / 10;
-            if (hackMoneyRatio < 0.01) {
-                hackMoneyRatio = 0.01;
+            else if (partialAttacks > 4 && ramUsage > 0.9 && hackMoneyRatio > 0.01) {
+                hackMoneyRatio -= hackMoneyRatio / 10;
+                if (hackMoneyRatio < 0.01) {
+                    hackMoneyRatio = 0.01;
+                }
+                partialAttacks = 3;
+                ns.print("INFO decrease hack money ratio to: " + hackMoneyRatio.toFixed(2));
             }
-            partialAttacks = 3;
-            ns.print("INFO decrease hack money ratio to: " + hackMoneyRatio.toFixed(2));
         }
-        // ToDo: HackMoneyRatio adjustment is always executed, even if no attack is launched. Can lead to one situation being evaluated and acted upon multiple times
-        // even if the situation did not change. Intended: Only changed situations shall be re-interpreted. Introduce tracking variable to only evaluate
-        // if an attack was launched
 
         // Hook for solve contracts script here if enough RAM is free.
         const homeMaxRam = ns.getServerMaxRam("home");
@@ -215,6 +216,7 @@ export async function main(ns) {
 }
 
 function manageAndHack(ns, freeRams, servers, targets, growStocks, hackStocks) {
+    var attackLaunched = false;
     for (let target of targets) {
         // check if there is already an attack against this target ongoing
         if (attackOngoing(ns, servers, target) == true) {
@@ -402,6 +404,10 @@ function manageAndHack(ns, freeRams, servers, targets, growStocks, hackStocks) {
             var moreRamNeed = 0;
 
             for (parallelAttacks = 1; parallelAttacks < maxAttacksDuringHack; parallelAttacks++) {
+                // do not run parallel attacks if running partial or low percentage attacks
+                if (hackMoneyRatio < 0.9) {
+                    break;
+                }
                 // check if we have enough RAM for one more attack
                 moreRamNeed = ((weakThreads * (parallelAttacks + 1) + growThreads * (parallelAttacks + 1) +
                     hackThreads * (parallelAttacks + 1)) * slaveScriptRam);
@@ -468,6 +474,9 @@ function manageAndHack(ns, freeRams, servers, targets, growStocks, hackStocks) {
             }
         }
 
+        // var profit = money * maxPercentage * ns.hackAnalyzeChance(target) / (hackThreads + growThreads + weakThreads);
+        // Could use hackAnalyzeChance for better value rating - costs ram however
+        
         var profit = money * maxPercentage / (hackThreads + growThreads + weakThreads);
         var profitM = profit * 60 / weakTime;
         profitsm.set(target, profitM);
@@ -493,19 +502,16 @@ function manageAndHack(ns, freeRams, servers, targets, growStocks, hackStocks) {
             if (hackThreads > 0) {
                 if (!findPlaceToRun(ns, hackScriptName, hackThreads, freeRams.serverRams, target, hackSleep, hackStock)) {
                     ns.print("WARN Did not find a place to run hack " + target + " needs " + overallRamNeed)
-                    return;
                 }
             }
             if (weakThreads > 0) {
                 if (!findPlaceToRun(ns, weakenScriptName, weakThreads, freeRams.serverRams, target, weakSleep)) {
                     ns.print("WARN Did not find a place to run weaken " + target + " needs " + overallRamNeed)
-                    return
                 }
             }
             if (growThreads > 0) {
                 if (!findPlaceToRun(ns, growScriptName, growThreads, freeRams.serverRams, target, growSleep, growStock)) {
                     ns.print("WARN Did not find a place to run grow " + target + " needs " + overallRamNeed)
-                    return;
                 }
             }
 
@@ -513,7 +519,9 @@ function manageAndHack(ns, freeRams, servers, targets, growStocks, hackStocks) {
             growSleep += timeBetweenAttacks;
             hackSleep += timeBetweenAttacks;
         }
+        attackLaunched = true;
     }
+    return attackLaunched;
 }
 
 function xpWeaken(ns, freeRams, servers, targets) {
@@ -639,6 +647,7 @@ function getHackable(ns, servers) {
         && ns.getServerRequiredHackingLevel(server) <= ns.getHackingLevel()
         && ns.getServerGrowth(server) > 1 && server != "n00dles").sort((a, b) =>
             profitsm.get(b) - profitsm.get(a))
+
     if (partialWeakGrow != null) {
         // prioritize a server which we have not initialized yet
         sortedServers.unshift(partialWeakGrow);
