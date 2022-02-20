@@ -30,7 +30,7 @@ function tendStocks(ns) {
         if (stock.longShares > 0) {
             if (stock.forecast > 0.5) {
                 longStocks.add(stock.sym);
-                ns.print(`INFO ${stock.summary} LONG ${ns.nFormat(stock.cost + stock.profit, "0a")} ${ns.nFormat(100 * stock.profit / stock.cost, "0.00")}%`);
+                ns.print(`INFO ${stock.summary} LONG ${ns.nFormat(stock.cost + stock.profit, "0.0a")} ${ns.nFormat(100 * stock.profit / stock.cost, "0.00")}%`);
                 overallValue += (stock.cost + stock.profit);
             }
             else {
@@ -46,7 +46,7 @@ function tendStocks(ns) {
         if (stock.shortShares > 0) {
             if (stock.forecast < 0.5) {
                 shortStocks.add(stock.sym);
-                ns.print(`INFO ${stock.summary} SHORT ${ns.nFormat(stock.cost + stock.profit, "0a")} ${ns.nFormat(100 * stock.profit / stock.cost, "0.00")}%`);
+                ns.print(`INFO ${stock.summary} SHORT ${ns.nFormat(stock.cost + stock.profit, "0.0a")} ${ns.nFormat(100 * stock.profit / stock.cost, "0.00")}%`);
                 overallValue += (stock.cost + stock.profit);
             }
             else {
@@ -62,7 +62,7 @@ function tendStocks(ns) {
     }
 
     for (const stock of stocks) {
-        var money = ns.getPlayer().money;
+        var money = ns.getServerMoneyAvailable("home");
         //ns.print(`INFO ${stock.summary}`);
         if (stock.forecast > 0.55) {
             longStocks.add(stock.sym);
@@ -85,7 +85,7 @@ function tendStocks(ns) {
             }
         }
     }
-    ns.print("Stock value: " + ns.nFormat(overallValue, "$0a"));
+    ns.print("Stock value: " + ns.nFormat(overallValue, "$0.0a"));
 
     // send stock market manipulation orders to hack manager
     var growStockPort = ns.getPortHandle(1); // port 1 is grow
