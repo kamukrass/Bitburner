@@ -19,15 +19,14 @@ export async function main(ns) {
 
 		corp = ns.corporation.getCorporation();
 		for (const division of corp.divisions.reverse()) {
-
-			ns.print("Division " + division.name);
+			//ns.print("Division " + division.name);
 			await hireEmployees(ns, division);
 			upgradeWarehouses(ns, division);
 			upgradeCorp(ns);
 			newProduct(ns, division);
 			doResearch(ns, division);
 		}
-		if (corp.numShares == corp.totalShares) {
+		if (corp.divisions.length < 2 && corp.numShares == corp.totalShares) {
 			if (corp.divisions[0].products.length > 3) {
 				await trickInvest(ns, corp.divisions[0]);
 			}
@@ -39,7 +38,7 @@ export async function main(ns) {
 async function hireEmployees(ns, division, productCity = "Sector-12") {
 	var employees = ns.corporation.getOffice(division.name, productCity).employees.length;
 	while (ns.corporation.getCorporation().funds > (cities.length * ns.corporation.getOfficeSizeUpgradeCost(division.name, productCity, 3))) {
-		ns.print("Upgrade office size for " + division.name);
+		ns.print(division.name + " Upgrade office size");
 		for (const city of cities) {
 			ns.corporation.upgradeOfficeSize(division.name, city, 3);
 			for (var i = 0; i < 3; i++) {
@@ -93,49 +92,33 @@ function upgradeWarehouses(ns, division) {
 		var cityWarehouse = ns.corporation.getWarehouse(division.name, city);
 		if (cityWarehouse.sizeUsed > 0.9 * cityWarehouse.size) {
 			if (ns.corporation.getCorporation().funds > ns.corporation.getUpgradeWarehouseCost(division.name, city)) {
-				ns.print("Upgrade warehouse in " + city);
+				ns.print(division.name + " Upgrade warehouse in " + city);
 				ns.corporation.upgradeWarehouse(division.name, city);
 			}
+		}
+	}
+	if (ns.corporation.getUpgradeLevel("Wilson Analytics") > 20) {
+		if (ns.corporation.getCorporation().funds > (4 * ns.corporation.getHireAdVertCost(division.name))) {
+			ns.print(division.name + " Hire AdVert");
+			ns.corporation.hireAdVert(division.name);
 		}
 	}
 }
 
 function upgradeCorp(ns) {
-	// TODO: Upgrades need to be better automated; just an initial setup up to now. Move into a separate function and add some dynamic prioritization.
-	while (ns.corporation.getCorporation().funds > ns.corporation.getUpgradeLevelCost("Project Insight")
-		&& ns.corporation.getUpgradeLevel("Project Insight") < 20) {
-		ns.print("Upgrade Project Insight to " + (ns.corporation.getUpgradeLevel("Project Insight") + 1));
-		ns.corporation.levelUpgrade("Project Insight");
+	for (const upgrade of upgradeList) {
+		if (ns.corporation.getCorporation().funds > (upgrade.prio * ns.corporation.getUpgradeLevelCost(upgrade.name))) {
+			ns.print("Upgrade " + upgrade.name + " to " + (ns.corporation.getUpgradeLevel(upgrade.name) + 1));
+			ns.corporation.levelUpgrade(upgrade.name);
+		}
 	}
-	while (ns.corporation.getCorporation().funds > ns.corporation.getUpgradeLevelCost("Nuoptimal Nootropic Injector Implants")
-		&& ns.corporation.getUpgradeLevel("Nuoptimal Nootropic Injector Implants") < 20) {
-		ns.print("Upgrade Nuoptimal Nootropic Injector Implants to " + (ns.corporation.getUpgradeLevel("Nuoptimal Nootropic Injector Implants") + 1));
-		ns.corporation.levelUpgrade("Nuoptimal Nootropic Injector Implants");
+	if (!ns.corporation.hasUnlockUpgrade("Shady Accounting") && ns.corporation.getUnlockUpgradeCost("Shady Accounting") * 2 < ns.corporation.getCorporation().funds) {
+		ns.print("Unlock Shady Accounting")
+		ns.corporation.unlockUpgrade("Shady Accounting");
 	}
-	while (ns.corporation.getCorporation().funds > ns.corporation.getUpgradeLevelCost("Neural Accelerators")
-		&& ns.corporation.getUpgradeLevel("Neural Accelerators") < 20) {
-		ns.print("Upgrade Neural Accelerators to " + (ns.corporation.getUpgradeLevel("Neural Accelerators") + 1));
-		ns.corporation.levelUpgrade("Neural Accelerators");
-	}
-	while (ns.corporation.getCorporation().funds > ns.corporation.getUpgradeLevelCost("FocusWires")
-		&& ns.corporation.getUpgradeLevel("FocusWires") < 20) {
-		ns.print("Upgrade FocusWires to " + (ns.corporation.getUpgradeLevel("FocusWires") + 1));
-		ns.corporation.levelUpgrade("FocusWires");
-	}
-	while (ns.corporation.getCorporation().funds > ns.corporation.getUpgradeLevelCost("Speech Processor Implants")
-		&& ns.corporation.getUpgradeLevel("Speech Processor Implants") < 20) {
-		ns.print("Upgrade Speech Processor Implants to " + (ns.corporation.getUpgradeLevel("Speech Processor Implants") + 1));
-		ns.corporation.levelUpgrade("Speech Processor Implants");
-	}
-	while (ns.corporation.getCorporation().funds > ns.corporation.getUpgradeLevelCost("DreamSense")
-		&& ns.corporation.getUpgradeLevel("DreamSense") < 10) {
-		ns.print("Upgrade DreamSense to " + (ns.corporation.getUpgradeLevel("DreamSense") + 1));
-		ns.corporation.levelUpgrade("DreamSense");
-	}
-	while (ns.corporation.getCorporation().funds > ns.corporation.getUpgradeLevelCost("Smart Factories")
-		&& ns.corporation.getUpgradeLevel("Smart Factories") < 20) {
-		ns.print("Upgrade Smart Factories to " + (ns.corporation.getUpgradeLevel("Smart Factories") + 1));
-		ns.corporation.levelUpgrade("Smart Factories");
+	else if (!ns.corporation.hasUnlockUpgrade("Government Partnership") && ns.corporation.getUnlockUpgradeCost("Government Partnership") * 2 < ns.corporation.getCorporation().funds) {
+		ns.print("Unlock Government Partnership")
+		ns.corporation.unlockUpgrade("Government Partnership");
 	}
 }
 
@@ -194,7 +177,7 @@ async function trickInvest(ns, division, productCity = "Sector-12") {
 	}
 
 	ns.print("Accept investment offer for " + ns.nFormat(ns.corporation.getInvestmentOffer().funds, "0.0a"));
-	ns.corporation.goPublic(900e6);
+	ns.corporation.goPublic(800e6);
 	//ns.corporation.acceptInvestmentOffer();
 
 	for (const city of cities) {
@@ -218,7 +201,6 @@ async function trickInvest(ns, division, productCity = "Sector-12") {
 }
 
 function doResearch(ns, division) {
-	// TODO: This function is an ugly copy & paste mess... put research + factors into an array and loop over it.
 	const laboratory = "Hi-Tech R&D Laboratory"
 	const marketTAI = "Market-TA.I";
 	const marketTAII = "Market-TA.II";
@@ -241,83 +223,27 @@ function doResearch(ns, division) {
 				ns.corporation.setProductMarketTA1(division.name, product, true);
 				ns.corporation.setProductMarketTA2(division.name, product, true);
 			}
-			if (division.name == "Software") {
-				for (const city of cities) {
-					ns.corporation.setMaterialMarketTA1(division.name, city, "AI Cores", true);
-					ns.corporation.setMaterialMarketTA2(division.name, city, "AI Cores", true);
-				}
-			}
 		}
 		return;
 	}
-	else if (!ns.corporation.hasResearched(division.name, "Overclock")) {
-		if (division.research > 4 * ns.corporation.getResearchCost(division.name, "Overclock")) {
-			ns.print("Research " + "Overclock");
-			ns.corporation.research(division.name, "Overclock");
-		}
-	}
-	else if (!ns.corporation.hasResearched(division.name, "uPgrade: Fulcrum")) {
-		if (division.research > 10 * ns.corporation.getResearchCost(division.name, "uPgrade: Fulcrum")) {
-			ns.print("Research " + "uPgrade: Fulcrum");
-			ns.corporation.research(division.name, "uPgrade: Fulcrum");
-		}
-	}
-	else if (!ns.corporation.hasResearched(division.name, "uPgrade: Capacity.I")) {
-		if (division.research > 3 * ns.corporation.getResearchCost(division.name, "uPgrade: Capacity.I")) {
-			ns.print("Research " + "uPgrade: Capacity.I");
-			ns.corporation.research(division.name, "uPgrade: Capacity.I");
-		}
-	}
-	else if (!ns.corporation.hasResearched(division.name, "uPgrade: Capacity.II")) {
-		if (division.research > 4 * ns.corporation.getResearchCost(division.name, "uPgrade: Capacity.II")) {
-			ns.print("Research " + "uPgrade: Capacity.II");
-			ns.corporation.research(division.name, "uPgrade: Capacity.II");
-		}
-	}
-	else if (!ns.corporation.hasResearched(division.name, "Self-Correcting Assemblers")) {
-		if (division.research > 10 * ns.corporation.getResearchCost(division.name, "Self-Correcting Assemblers")) {
-			ns.print("Research " + "Self-Correcting Assemblers");
-			ns.corporation.research(division.name, "Self-Correcting Assemblers");
-		}
-	}
-	else if (!ns.corporation.hasResearched(division.name, "Drones")) {
-		if (division.research > 21 * ns.corporation.getResearchCost(division.name, "Drones")) {
-			ns.print("Research " + "Drones");
-			ns.corporation.research(division.name, "Drones");
-		}
-	}
-	else if (!ns.corporation.hasResearched(division.name, "Drones - Assembly")) {
-		if (division.research > 4 * ns.corporation.getResearchCost(division.name, "Drones - Assembly")) {
-			ns.print("Research " + "Drones - Assembly");
-			ns.corporation.research(division.name, "Drones - Assembly");
-		}
-	}
-	else if (!ns.corporation.hasResearched(division.name, "Drones - Transport")) {
-		if (division.research > 10 * ns.corporation.getResearchCost(division.name, "Drones - Transport")) {
-			ns.print("Research " + "Drones - Transport");
-			ns.corporation.research(division.name, "Drones - Transport");
-		}
-	}
-	else if (!ns.corporation.hasResearched(division.name, "Automatic Drug Administration")) {
-		if (division.research > 26 * ns.corporation.getResearchCost(division.name, "Automatic Drug Administration")) {
-			ns.print("Research " + "Automatic Drug Administration");
-			ns.corporation.research(division.name, "Automatic Drug Administration");
-		}
-	}
-	else if (!ns.corporation.hasResearched(division.name, "CPH4 Injections")) {
-		if (division.research > 10 * ns.corporation.getResearchCost(division.name, "CPH4 Injections")) {
-			ns.print("Research " + "CPH4 Injections");
-			ns.corporation.research(division.name, "CPH4 Injections");
+	else {
+		for (const researchObject of researchList) {
+			if (!ns.corporation.hasResearched(division.name, researchObject.name)) {
+				if (division.research > (researchObject.prio * ns.corporation.getResearchCost(division.name, researchObject.name))) {
+					ns.print("Research " + division.name + " -> " + researchObject.name);
+					ns.corporation.research(division.name, researchObject.name);
+				}
+			}
 		}
 	}
 }
 
 function newProduct(ns, division) {
-	ns.print("Products: " + division.products);
+	//ns.print("Products: " + division.products);
 	var productNumbers = [];
 	for (var product of division.products) {
 		if (ns.corporation.getProduct(division.name, product).developmentProgress < 100) {
-			ns.print("Product development in progress: " + ns.corporation.getProduct(division.name, product).developmentProgress);
+			ns.print(division.name + " Product development progress: " + ns.corporation.getProduct(division.name, product).developmentProgress.toFixed(1) + "%");
 			return false;
 		}
 		else {
@@ -357,9 +283,10 @@ function newProduct(ns, division) {
 	}
 	const newProductName = "Product-" + newProductNumber;
 	var productInvest = 1e9;
-	if (ns.corporation.getCorporation().funds < 2 * productInvest) {
+	if (ns.corporation.getCorporation().funds < (2 * productInvest)) {
 		productInvest = Math.floor(ns.corporation.getCorporation().funds / 2);
 	}
+	productInvest = Math.max(productInvest, 0); // do not invest negative amounts of funds
 	ns.print("Start new product development " + newProductName);
 	ns.corporation.makeProduct(division.name, "Sector-12", newProductName, productInvest, productInvest);
 }
@@ -375,9 +302,7 @@ async function initCities(ns, division, productCity = "Sector-12") {
 		ns.corporation.setSmartSupply(division.name, city, true);
 
 		if (city != productCity) {
-			// setup office
-			//const newEmployees = 3;
-			//ns.corporation.upgradeOfficeSize(division.name, productCity, newEmployees);
+			// setup employees
 			for (let i = 0; i < 3; i++) {
 				await ns.corporation.hireEmployee(division.name, city);
 			}
@@ -412,15 +337,11 @@ async function initialCorpUpgrade(ns) {
 
 	ns.print("unlock upgrades");
 
-	//ns.corporation.levelUpgrade("Smart Factories");
 	ns.corporation.levelUpgrade("Smart Storage");
 	ns.corporation.levelUpgrade("Smart Storage");
 	ns.corporation.levelUpgrade("Smart Storage");
 	ns.corporation.levelUpgrade("Smart Storage");
 	ns.corporation.levelUpgrade("DreamSense");
-	//ns.corporation.levelUpgrade("Wilson Analytics");
-	//ns.corporation.levelUpgrade("Project Insight");
-	//ns.corporation.levelUpgrade("ABC SalesBots");
 
 	// upgrade employee stats
 	ns.corporation.levelUpgrade("Nuoptimal Nootropic Injector Implants");
@@ -433,9 +354,28 @@ async function initialCorpUpgrade(ns) {
 const cities = ["Sector-12", "Aevum", "Volhaven", "Chongqing", "New Tokyo", "Ishima"];
 
 const upgradeList = [
-
+	// lower priority value -> upgrade faster
+	{ prio: 2, name: "Project Insight", },
+	{ prio: 2, name: "DreamSense" },
+	{ prio: 4, name: "ABC SalesBots" },
+	{ prio: 4, name: "Smart Factories" },
+	{ prio: 4, name: "Smart Storage" },
+	{ prio: 8, name: "Neural Accelerators" },
+	{ prio: 8, name: "Nuoptimal Nootropic Injector Implants" },
+	{ prio: 8, name: "FocusWires" },
+	{ prio: 8, name: "Speech Processor Implants" },
+	{ prio: 8, name: "Wilson Analytics" },
 ];
 
 const researchList = [
-
+	{ prio: 4, name: "Overclock" },
+	{ prio: 10, name: "uPgrade: Fulcrum" },
+	{ prio: 3, name: "uPgrade: Capacity.I" },
+	{ prio: 4, name: "uPgrade: Capacity.II" },
+	{ prio: 10, name: "Self-Correcting Assemblers" },
+	{ prio: 21, name: "Drones" },
+	{ prio: 4, name: "Drones - Assembly" },
+	{ prio: 10, name: "Drones - Transport" },
+	{ prio: 26, name: "Automatic Drug Administration" },
+	{ prio: 10, name: "CPH4 Injections" },
 ];
