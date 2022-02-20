@@ -49,8 +49,9 @@ function upgradeHomeServer(ns, player) {
 			|| (player.has4SDataTixApi && ns.getUpgradeHomeRamCost() < 0.2 * player.money)) {
 			// Upgrade slowly in the first run while we save money for 4S or the first batch of augmentations
 			// Assumption: We wont't join Cybersec after the first run anymore
+			// ToDo: Beautification: At Max Home Server Ram, it still tries to upgrade RAM -> prevent that
 			ns.print("Upgraded Home Server RAM");
-			ns.toast("Upgraded Home Server RAM");
+			//ns.toast("Upgraded Home Server RAM");
 			ns.upgradeHomeRam();
 		}
 	}
@@ -244,7 +245,7 @@ function buyAugments(ns, player) {
 		for (var preReqAug of ns.getAugmentationPrereq(sortedAugmentations[i][0])) {
 			if (!preReqAugments.includes(preReqAug) && !purchasedAugmentations.includes(preReqAug)) {
 				preReqAugments.push(preReqAug);
-				ns.print("move prereq aug: " + preReqAug + " before " + sortedAugmentations[i][0]);
+				//ns.print("move prereq aug: " + preReqAug + " before " + sortedAugmentations[i][0]);
 				sortedAugmentations.splice(i, 0, [preReqAug, ns.getAugmentationPrice(preReqAug)]);
 				//overallAugmentationCost += sortedAugmentations[i][1] * augmentationCostMultiplier;
 				if (i >= 0) {
