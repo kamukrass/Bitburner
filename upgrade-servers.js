@@ -77,7 +77,7 @@ export async function main(ns) {
 				break;
 			}
 			else {
-				if (maxPurchaseableRam * 2 <= ramLimit && ownedServers.lehgth > 6) {
+				if (maxPurchaseableRam * 2 <= ramLimit && ownedServers.length > 6) {
 					if (upgradeServerRAM <= ns.getServerMaxRam(ownedServers[6]) * 2) {
 						// switch to double RAM after x servers, so we got the second / third set of servers sizes 
 						// this looks typically like: servers 0-6: 64 GB; servers 7-13: 32 GB; servers 14-20: 16 GB; servers 21-24: 8 GB
