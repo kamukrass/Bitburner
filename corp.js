@@ -20,9 +20,9 @@ export async function main(ns) {
 		corp = ns.corporation.getCorporation();
 		for (const division of corp.divisions.reverse()) {
 			//ns.print("Division " + division.name);
-			await hireEmployees(ns, division);
 			upgradeWarehouses(ns, division);
 			upgradeCorp(ns);
+			await hireEmployees(ns, division);
 			newProduct(ns, division);
 			doResearch(ns, division);
 		}
@@ -108,8 +108,11 @@ function upgradeWarehouses(ns, division) {
 function upgradeCorp(ns) {
 	for (const upgrade of upgradeList) {
 		if (ns.corporation.getCorporation().funds > (upgrade.prio * ns.corporation.getUpgradeLevelCost(upgrade.name))) {
-			ns.print("Upgrade " + upgrade.name + " to " + (ns.corporation.getUpgradeLevel(upgrade.name) + 1));
-			ns.corporation.levelUpgrade(upgrade.name);
+			// those two upgrades ony make sense later once we can afford a bunch of them and already have some base marketing from DreamSense
+			if ((upgrade != "ABC SalesBots" && upgrade != "Wilson Analytics") || (ns.corporation.getUpgradeLevel("DreamSense") > 20)) {
+				ns.print("Upgrade " + upgrade.name + " to " + (ns.corporation.getUpgradeLevel(upgrade.name) + 1));
+				ns.corporation.levelUpgrade(upgrade.name);
+			}
 		}
 	}
 	if (!ns.corporation.hasUnlockUpgrade("Shady Accounting") && ns.corporation.getUnlockUpgradeCost("Shady Accounting") * 2 < ns.corporation.getCorporation().funds) {
@@ -284,9 +287,15 @@ function newProduct(ns, division) {
 	const newProductName = "Product-" + newProductNumber;
 	var productInvest = 1e9;
 	if (ns.corporation.getCorporation().funds < (2 * productInvest)) {
-		productInvest = Math.floor(ns.corporation.getCorporation().funds / 2);
+		if (ns.corporation.getCorporation().funds <= 0) {
+			ns.print("WARN negative funds, cannot start new product development " + ns.nFormat(ns.corporation.getCorporation().funds, "0a"));
+			return;
+			// productInvest = 0; // product development with 0 funds not possible if corp has negative funds
+		}
+		else {
+			productInvest = Math.floor(ns.corporation.getCorporation().funds / 2);
+		}
 	}
-	productInvest = Math.max(productInvest, 0); // do not invest negative amounts of funds
 	ns.print("Start new product development " + newProductName);
 	ns.corporation.makeProduct(division.name, "Sector-12", newProductName, productInvest, productInvest);
 }
