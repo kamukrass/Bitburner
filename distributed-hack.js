@@ -646,7 +646,8 @@ function getHackable(ns, servers) {
     var sortedServers = [...servers.values()].filter(server => ns.getServerMaxMoney(server) > 100000
         && ns.getServerRequiredHackingLevel(server) <= ns.getHackingLevel()
         && ns.getServerGrowth(server) > 1 && server != "n00dles").sort((a, b) =>
-            profitsm.get(b) - profitsm.get(a))
+            profitsm["get"](b) - profitsm["get"](a))
+            // unnatural usage of "get" to avoid stanek.get RAM calculation bug
 
     if (partialWeakGrow != null) {
         // prioritize a server which we have not initialized yet
