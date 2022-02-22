@@ -7,19 +7,16 @@ export async function main(ns) {
 	}
 	var corp = ns.corporation.getCorporation();
 	if (corp.divisions.length < 1) {
-		// initial Software Company setup
+		// initial Company setup
 		ns.corporation.expandIndustry("Tobacco", "Tobacco");
-		ns.corporation.unlockUpgrade("Smart Supply");
 		corp = ns.corporation.getCorporation();
 		await initialCorpUpgrade(ns);
 		await initCities(ns, corp.divisions[0]);
 	}
 
 	while (true) {
-
 		corp = ns.corporation.getCorporation();
 		for (const division of corp.divisions.reverse()) {
-			//ns.print("Division " + division.name);
 			upgradeWarehouses(ns, division);
 			upgradeCorp(ns);
 			await hireEmployees(ns, division);
@@ -38,6 +35,7 @@ export async function main(ns) {
 async function hireEmployees(ns, division, productCity = "Sector-12") {
 	var employees = ns.corporation.getOffice(division.name, productCity).employees.length;
 	while (ns.corporation.getCorporation().funds > (cities.length * ns.corporation.getOfficeSizeUpgradeCost(division.name, productCity, 3))) {
+		// upgrade all cities + 3 employees if sufficient funds
 		ns.print(division.name + " Upgrade office size");
 		for (const city of cities) {
 			ns.corporation.upgradeOfficeSize(division.name, city, 3);
@@ -47,7 +45,7 @@ async function hireEmployees(ns, division, productCity = "Sector-12") {
 		}
 	}
 	if (ns.corporation.getOffice(division.name, productCity).employees.length > employees) {
-		// set jobs after hiring people just in case we hire lots of people at once and setting jobs seems slow
+		// set jobs after hiring people just in case we hire lots of people at once and setting jobs is slow
 		for (const city of cities) {
 			employees = ns.corporation.getOffice(division.name, city).employees.length;
 			if (ns.corporation.hasResearched(division.name, "Market-TA.II")) {
@@ -98,6 +96,7 @@ function upgradeWarehouses(ns, division) {
 		}
 	}
 	if (ns.corporation.getUpgradeLevel("Wilson Analytics") > 20) {
+		// Upgrade AdVert.Inc after a certain amount of Wilson Analytivs upgrades are available
 		if (ns.corporation.getCorporation().funds > (4 * ns.corporation.getHireAdVertCost(division.name))) {
 			ns.print(division.name + " Hire AdVert");
 			ns.corporation.hireAdVert(division.name);
@@ -107,6 +106,7 @@ function upgradeWarehouses(ns, division) {
 
 function upgradeCorp(ns) {
 	for (const upgrade of upgradeList) {
+		// purchase upgrades based on available funds and priority; see upgradeList
 		if (ns.corporation.getCorporation().funds > (upgrade.prio * ns.corporation.getUpgradeLevelCost(upgrade.name))) {
 			// those two upgrades ony make sense later once we can afford a bunch of them and already have some base marketing from DreamSense
 			if ((upgrade != "ABC SalesBots" && upgrade != "Wilson Analytics") || (ns.corporation.getUpgradeLevel("DreamSense") > 20)) {
@@ -208,12 +208,14 @@ function doResearch(ns, division) {
 	const marketTAI = "Market-TA.I";
 	const marketTAII = "Market-TA.II";
 	if (!ns.corporation.hasResearched(division.name, laboratory)) {
+		// always research labaratory first
 		if (division.research > ns.corporation.getResearchCost(division.name, laboratory)) {
 			ns.print("Research " + laboratory);
 			ns.corporation.research(division.name, laboratory);
 		}
 	}
 	else if (!ns.corporation.hasResearched(division.name, marketTAII)) {
+		// always research Market-TA.I plus .II first and in one step
 		var researchCost = ns.corporation.getResearchCost(division.name, marketTAI)
 			+ ns.corporation.getResearchCost(division.name, marketTAII);
 
@@ -231,6 +233,7 @@ function doResearch(ns, division) {
 	}
 	else {
 		for (const researchObject of researchList) {
+			// research other upgrades based on available funds and priority; see researchList
 			if (!ns.corporation.hasResearched(division.name, researchObject.name)) {
 				if (division.research > (researchObject.prio * ns.corporation.getResearchCost(division.name, researchObject.name))) {
 					ns.print("Research " + division.name + " -> " + researchObject.name);
@@ -288,7 +291,7 @@ function newProduct(ns, division) {
 	var productInvest = 1e9;
 	if (ns.corporation.getCorporation().funds < (2 * productInvest)) {
 		if (ns.corporation.getCorporation().funds <= 0) {
-			ns.print("WARN negative funds, cannot start new product development " + ns.nFormat(ns.corporation.getCorporation().funds, "0a"));
+			ns.print("WARN negative funds, cannot start new product development " + ns.nFormat(ns.corporation.getCorporation().funds, "0.0a"));
 			return;
 			// productInvest = 0; // product development with 0 funds not possible if corp has negative funds
 		}
@@ -343,21 +346,18 @@ async function initCities(ns, division, productCity = "Sector-12") {
 }
 
 async function initialCorpUpgrade(ns) {
-
 	ns.print("unlock upgrades");
-
+	ns.corporation.unlockUpgrade("Smart Supply");	
 	ns.corporation.levelUpgrade("Smart Storage");
 	ns.corporation.levelUpgrade("Smart Storage");
 	ns.corporation.levelUpgrade("Smart Storage");
 	ns.corporation.levelUpgrade("Smart Storage");
 	ns.corporation.levelUpgrade("DreamSense");
-
 	// upgrade employee stats
 	ns.corporation.levelUpgrade("Nuoptimal Nootropic Injector Implants");
 	ns.corporation.levelUpgrade("Speech Processor Implants");
 	ns.corporation.levelUpgrade("Neural Accelerators");
 	ns.corporation.levelUpgrade("FocusWires");
-
 }
 
 const cities = ["Sector-12", "Aevum", "Volhaven", "Chongqing", "New Tokyo", "Ishima"];
@@ -377,6 +377,7 @@ const upgradeList = [
 ];
 
 const researchList = [
+	// lower priority value -> upgrade faster
 	{ prio: 4, name: "Overclock" },
 	{ prio: 10, name: "uPgrade: Fulcrum" },
 	{ prio: 3, name: "uPgrade: Capacity.I" },
