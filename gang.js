@@ -5,12 +5,13 @@ export async function main(ns) {
 		joinGang(ns);
 	}
 
+	var territoryWinChance = 1;
 	while (true) {
 		recruit(ns);
 		equipMembers(ns);
 		ascend(ns);
-		assignMembers(ns);
-		territoryWar(ns);
+		territoryWinChance = territoryWar(ns);
+		assignMembers(ns, territoryWinChance);
 		await ns.sleep(2000);
 	}
 }
@@ -18,7 +19,10 @@ export async function main(ns) {
 function territoryWar(ns) {
 	const minWinChanceToStartWar = 0.8;
 	let gangInfo = ns.gang.getGangInformation();
-	if (gangInfo.territory < 1) {
+	// ns.print("Territory: " + gangInfo.territory);
+	// sometimes territory is stuck at something like 99.99999999999983%
+	// since clash chance takes time to decrease anyways, should not be an issue to stop a bit before 100,000000%
+	if (gangInfo.territory < 0.9999) {
 		let otherGangInfos = ns.gang.getOtherGangInformation();
 		let myGangPower = gangInfo.power;
 		//ns.print("My gang power: " + myGangPower);
@@ -42,8 +46,9 @@ function territoryWar(ns) {
 				ns.toast("Start territory warfare");
 				ns.gang.setTerritoryWarfare(true);
 			}
-			return;
+			ns.print("Territory win chance: " + lowestWinChance);
 		}
+		return lowestWinChance;
 	}
 
 	if (gangInfo.territoryWarfareEngaged) {
@@ -51,6 +56,7 @@ function territoryWar(ns) {
 		ns.toast("Stop territory warfare");
 		ns.gang.setTerritoryWarfare(false);
 	}
+	return 1;
 }
 
 function ascend(ns) {
@@ -79,7 +85,7 @@ function equipMembers(ns) {
 		let memberInfo = ns.gang.getMemberInformation(member);
 		if (memberInfo.augmentations.length < augmentationNames.length) {
 			for (let augmentation of augmentationNames) {
-				if (ns.gang.getEquipmentCost(augmentation) < (0.1 * ns.getServerMoneyAvailable("home"))) {
+				if (ns.gang.getEquipmentCost(augmentation) < (0.01 * ns.getServerMoneyAvailable("home"))) {
 					ns.print("Purchase augmentation for " + member + ": " + augmentation);
 					ns.gang.purchaseEquipment(member, augmentation);
 				}
@@ -88,24 +94,33 @@ function equipMembers(ns) {
 	}
 }
 
-function assignMembers(ns) {
+function assignMembers(ns, territoryWinChance) {
 	let members = ns.gang.getMemberNames();
 	members.sort((a, b) => memberCombatStats(ns, b) - memberCombatStats(ns, a));
 	let gangInfo = ns.gang.getGangInformation();
-	let workJobs = Math.ceil((members.length - 1) / 2);
+	let workJobs = Math.ceil((members.length - 1) / 3);
 	let wantedLevelIncrease = 0;
 	for (let member of members) {
 		let highestTaskValue = 0;
 		let highestValueTask = "Train Combat";
 		let memberInfo = ns.gang.getMemberInformation(member);
 
-		if (workJobs > 0 && gangInfo.territory < 1 && members.length >= 12) {
+		if (workJobs > 0 && gangInfo.territory < 1 && members.length >= 12 && territoryWinChance < 0.95) {
+			// support territory warfare if max team size, not at max territory yet and win chance not high enough yet
 			workJobs--;
 			highestValueTask = "Territory Warfare";
 		}
+		else if (memberCombatStats(ns, member) < 200) {
+			highestValueTask = "Train Combat";
+		}
+		else if (workJobs >= 0 && wantedLevelIncrease > 0) {
+			workJobs--;
+			highestValueTask = "Vigilante Justice";
+			//ns.print("Wanted Level for Vigilante: " + ns.formulas.gang.wantedLevelGain(gangInfo, ns.gang.getMemberInformation(member), ns.gang.getTaskStats(highestValueTask)))
+			wantedLevelIncrease += ns.formulas.gang.wantedLevelGain(gangInfo, ns.gang.getMemberInformation(member), ns.gang.getTaskStats(highestValueTask));
+		}
 		else if (workJobs > 0 && memberCombatStats(ns, member) > 50) {
 			workJobs--;
-
 			for (const task of tasks) {
 				if (taskValue(ns, member, task) > highestTaskValue) {
 					highestTaskValue = taskValue(ns, member, task)
@@ -115,11 +130,8 @@ function assignMembers(ns) {
 			wantedLevelIncrease += ns.formulas.gang.wantedLevelGain(gangInfo, ns.gang.getMemberInformation(member), ns.gang.getTaskStats(highestValueTask));
 			//ns.print("Wanted Level for Increase: " + ns.formulas.gang.wantedLevelGain(gangInfo, ns.gang.getMemberInformation(member), ns.gang.getTaskStats(highestValueTask)))
 		}
-		else if (wantedLevelIncrease > 0) {
-			highestValueTask = "Vigilante Justice";
-			//ns.print("Wanted Level for Vigilante: " + ns.formulas.gang.wantedLevelGain(gangInfo, ns.gang.getMemberInformation(member), ns.gang.getTaskStats(highestValueTask)))
-			wantedLevelIncrease += ns.formulas.gang.wantedLevelGain(gangInfo, ns.gang.getMemberInformation(member), ns.gang.getTaskStats(highestValueTask));
-		}
+
+
 		if (memberInfo.task != highestValueTask) {
 			ns.print("Assign " + member + " to " + highestValueTask);
 			ns.gang.setMemberTask(member, highestValueTask);
@@ -128,10 +140,19 @@ function assignMembers(ns) {
 }
 
 function taskValue(ns, member, task) {
+
+	// determine money and reputation gain for a task
 	let respectGain = ns.formulas.gang.respectGain(ns.gang.getGangInformation(), ns.gang.getMemberInformation(member), ns.gang.getTaskStats(task));
 	let moneyGain = ns.formulas.gang.moneyGain(ns.gang.getGangInformation(), ns.gang.getMemberInformation(member), ns.gang.getTaskStats(task));
-	moneyGain /= 1000;
-	moneyGain = Math.max(moneyGain, respectGain);
+	
+	if (ns.getServerMoneyAvailable("home") > 10e12) {
+		// if we got all augmentations, money from gangs is probably not relevant anymore; so focus on respect
+		// set money gain at least to respect gain in case of low money gain tasks like terrorism
+		moneyGain /= 100; // compare money to respect gain value; give respect more priority
+		moneyGain = Math.max(moneyGain, respectGain);
+	}
+	
+	// return a value based on money gain and respect gain
 	return respectGain * moneyGain;
 }
 
