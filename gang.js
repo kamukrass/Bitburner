@@ -98,7 +98,7 @@ function assignMembers(ns, territoryWinChance) {
 	let members = ns.gang.getMemberNames();
 	members.sort((a, b) => memberCombatStats(ns, b) - memberCombatStats(ns, a));
 	let gangInfo = ns.gang.getGangInformation();
-	let workJobs = Math.ceil((members.length - 1) / 3);
+	let workJobs = Math.floor((members.length) / 2);
 	let wantedLevelIncrease = 0;
 	for (let member of members) {
 		let highestTaskValue = 0;
@@ -110,7 +110,7 @@ function assignMembers(ns, territoryWinChance) {
 			workJobs--;
 			highestValueTask = "Territory Warfare";
 		}
-		else if (memberCombatStats(ns, member) < 200) {
+		else if (memberCombatStats(ns, member) < 50) {
 			highestValueTask = "Train Combat";
 		}
 		else if (workJobs >= 0 && wantedLevelIncrease > 0) {
@@ -122,8 +122,8 @@ function assignMembers(ns, territoryWinChance) {
 		else if (workJobs > 0 && memberCombatStats(ns, member) > 50) {
 			workJobs--;
 			for (const task of tasks) {
-				if (taskValue(ns, member, task) > highestTaskValue) {
-					highestTaskValue = taskValue(ns, member, task)
+				if (taskValue(ns, gangInfo, member, task) > highestTaskValue) {
+					highestTaskValue = taskValue(ns, gangInfo, member, task)
 					highestValueTask = task;
 				}
 			}
@@ -139,12 +139,22 @@ function assignMembers(ns, territoryWinChance) {
 	}
 }
 
-function taskValue(ns, member, task) {
-
+function taskValue(ns, gangInfo, member, task) {
 	// determine money and reputation gain for a task
-	let respectGain = ns.formulas.gang.respectGain(ns.gang.getGangInformation(), ns.gang.getMemberInformation(member), ns.gang.getTaskStats(task));
-	let moneyGain = ns.formulas.gang.moneyGain(ns.gang.getGangInformation(), ns.gang.getMemberInformation(member), ns.gang.getTaskStats(task));
-	
+	let respectGain = ns.formulas.gang.respectGain(gangInfo, ns.gang.getMemberInformation(member), ns.gang.getTaskStats(task));
+	let moneyGain = ns.formulas.gang.moneyGain(gangInfo, ns.gang.getMemberInformation(member), ns.gang.getTaskStats(task));
+	let wantedLevelIncrease = ns.formulas.gang.wantedLevelGain(gangInfo, ns.gang.getMemberInformation(member), ns.gang.getTaskStats(task));
+	let vigilanteWantedDecrease = ns.formulas.gang.wantedLevelGain(gangInfo, ns.gang.getMemberInformation(member), ns.gang.getTaskStats("Vigilante Justice"));
+	if ( wantedLevelIncrease + vigilanteWantedDecrease > 0){
+		// avoid tasks where more than one vigilante justice is needed to compensate
+		return 0;
+	}
+	else if ( (2 * wantedLevelIncrease) + vigilanteWantedDecrease > 0){
+		// Simple compensation for wanted level since we need more vigilante then
+		// ToDo: Could be a more sophisticated formula here
+		moneyGain *= 0.75;
+	}
+
 	if (ns.getServerMoneyAvailable("home") > 10e12) {
 		// if we got all augmentations, money from gangs is probably not relevant anymore; so focus on respect
 		// set money gain at least to respect gain in case of low money gain tasks like terrorism
