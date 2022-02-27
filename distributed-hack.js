@@ -152,15 +152,15 @@ export async function main(ns) {
         }
 
         // Main logic sits here, determine whether or not and how many threads we should call weaken, grow and hack
-        var attackLaunched = manageAndHack(ns, freeRams, servers, targets, growStocks, hackStocks);
+        var attacksLaunched = manageAndHack(ns, freeRams, servers, targets, growStocks, hackStocks);
 
-        if (attackLaunched) {
+        if (attacksLaunched > 0) {
             // Adjust hackMoneyRatio
             ramUsage = (freeRams.overallMaxRam - freeRams.overallFreeRam) / freeRams.overallMaxRam;
             //ns.print("Partial attacks: " + partialAttacks);
             //ns.print("RAM usage: " + ramUsage);
             if (partialAttacks == 0 && ramUsage < 0.95 && hackMoneyRatio < 0.99) {
-                hackMoneyRatio += (1 - hackMoneyRatio) * (1 - ramUsage);
+                hackMoneyRatio += (1 - hackMoneyRatio) * (1 - ramUsage) * attacksLaunched;
                 if (hackMoneyRatio > 0.99) {
                     hackMoneyRatio = 0.99;
                 }
@@ -216,7 +216,7 @@ export async function main(ns) {
 }
 
 function manageAndHack(ns, freeRams, servers, targets, growStocks, hackStocks) {
-    var attackLaunched = false;
+    var attacksLaunched = 0;
     for (let target of targets) {
         // check if there is already an attack against this target ongoing
         if (attackOngoing(ns, servers, target) == true) {
@@ -405,7 +405,7 @@ function manageAndHack(ns, freeRams, servers, targets, growStocks, hackStocks) {
 
             for (parallelAttacks = 1; parallelAttacks < maxAttacksDuringHack; parallelAttacks++) {
                 // do not run parallel attacks if running partial or low percentage attacks
-                if (hackMoneyRatio < 0.9) {
+                if (hackMoneyRatio < 0.5) {
                     break;
                 }
                 // check if we have enough RAM for one more attack
@@ -518,10 +518,11 @@ function manageAndHack(ns, freeRams, servers, targets, growStocks, hackStocks) {
             weakSleep += timeBetweenAttacks;
             growSleep += timeBetweenAttacks;
             hackSleep += timeBetweenAttacks;
+            attacksLaunched++;
         }
-        attackLaunched = true;
+        
     }
-    return attackLaunched;
+    return attacksLaunched;
 }
 
 function xpWeaken(ns, freeRams, servers, targets) {
