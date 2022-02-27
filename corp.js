@@ -179,9 +179,12 @@ async function trickInvest(ns, division, productCity = "Sector-12") {
 		await ns.sleep(200);
 	}
 
-	ns.print("Accept investment offer for " + ns.nFormat(ns.corporation.getInvestmentOffer().funds, "0.0a"));
+	ns.print("Investment offer for 10% shares: " + ns.nFormat(ns.corporation.getInvestmentOffer().funds, "0.0a"));
+	ns.print("Funds before public: " + ns.nFormat(ns.corporation.getCorporation().funds, "0.0a"));
+
 	ns.corporation.goPublic(800e6);
-	//ns.corporation.acceptInvestmentOffer();
+
+	ns.print("Funds after  public: " + ns.nFormat(ns.corporation.getCorporation().funds, "0.0a"));
 
 	for (const city of cities) {
 		// set employees back to normal operation
