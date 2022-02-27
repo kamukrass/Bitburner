@@ -104,9 +104,11 @@ function chooseAction(ns, sleepTime, player, factions) {
 	else if (player.hacking >= 250) {
 		var corpsToWorkFor = getCorpsForReputation(ns, factions);
 		//ns.print("Corps to work for: " + corpsToWorkFor);
-		applyForPromotion(ns, player, corpsToWorkFor[0]);
-		ns.print("Start working for " + corpsToWorkFor[0]);
-		ns.toast("Start working for " + corpsToWorkFor[0]);
+		if (corpsToWorkFor.length > 0) {
+			applyForPromotion(ns, player, corpsToWorkFor[0]);
+			ns.print("Start working for " + corpsToWorkFor[0]);
+			ns.toast("Start working for " + corpsToWorkFor[0]);
+		}
 	}
 	else if (focus) {
 		var crimeTime = commitCrime(ns, player);
@@ -180,7 +182,7 @@ function currentActionUseful(ns, player, factions) {
 		var reputationGoal = 200000; // 200 but some is lost when stop working ; 266667 
 		// ToDo: except fulcrum + 66.666 k and bachman not hacked
 
-		var reputation = ns.getCompanyRep(player.companyName) + (player.workRepGained * 3/4);
+		var reputation = ns.getCompanyRep(player.companyName) + (player.workRepGained * 3 / 4);
 		ns.print("Company reputation: " + ns.nFormat(reputation, "0a"));
 		if (factions.has(player.companyName)) {
 			return false;
@@ -266,7 +268,7 @@ function buyAugments(ns, player) {
 				skipAugments.push((sortedAugmentations[i][0]));
 			}
 			overallAugmentationCost += sortedAugmentations[i][1] * augmentationCostMultiplier;
-			augmentationCostMultiplier *= 2;
+			augmentationCostMultiplier *= 1.9;
 		}
 	}
 
