@@ -210,7 +210,7 @@ function doResearch(ns, division) {
 	if (!ns.corporation.hasResearched(division.name, laboratory)) {
 		// always research labaratory first
 		if (division.research > ns.corporation.getResearchCost(division.name, laboratory)) {
-			ns.print("Research " + laboratory);
+			ns.print(division.name + " Research " + laboratory);
 			ns.corporation.research(division.name, laboratory);
 		}
 	}
@@ -332,9 +332,9 @@ async function initCities(ns, division, productCity = "Sector-12") {
 			for (let i = 0; i < newEmployees + 3; i++) {
 				await ns.corporation.hireEmployee(division.name, productCity);
 			}
-			await ns.corporation.setAutoJobAssignment(division.name, productCity, "Operations", 3);
+			await ns.corporation.setAutoJobAssignment(division.name, productCity, "Operations", 4);
 			await ns.corporation.setAutoJobAssignment(division.name, productCity, "Engineer", 6);
-			await ns.corporation.setAutoJobAssignment(division.name, productCity, "Management", 3);
+			await ns.corporation.setAutoJobAssignment(division.name, productCity, "Management", 2);
 		}
 		const warehouseUpgrades = 3;
 		for (let i = 0; i < warehouseUpgrades; i++) {
