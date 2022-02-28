@@ -109,7 +109,7 @@ function upgradeCorp(ns) {
 		// purchase upgrades based on available funds and priority; see upgradeList
 		if (ns.corporation.getCorporation().funds > (upgrade.prio * ns.corporation.getUpgradeLevelCost(upgrade.name))) {
 			// those two upgrades ony make sense later once we can afford a bunch of them and already have some base marketing from DreamSense
-			if ((upgrade != "ABC SalesBots" && upgrade != "Wilson Analytics") || (ns.corporation.getUpgradeLevel("DreamSense") > 20)) {
+			if ((upgrade.name != "ABC SalesBots" && upgrade.name != "Wilson Analytics") || (ns.corporation.getUpgradeLevel("DreamSense") > 20)) {
 				ns.print("Upgrade " + upgrade.name + " to " + (ns.corporation.getUpgradeLevel(upgrade.name) + 1));
 				ns.corporation.levelUpgrade(upgrade.name);
 			}
