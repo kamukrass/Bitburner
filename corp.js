@@ -223,9 +223,9 @@ function doResearch(ns, division) {
 			+ ns.corporation.getResearchCost(division.name, marketTAII);
 
 		if (division.research > researchCost * 1.1) {
-			ns.print("Research " + marketTAI);
+			ns.print(division.name + " Research " + marketTAI);
 			ns.corporation.research(division.name, marketTAI);
-			ns.print("Research " + marketTAII);
+			ns.print(division.name + " Research " + marketTAII);
 			ns.corporation.research(division.name, marketTAII);
 			for (var product of division.products) {
 				ns.corporation.setProductMarketTA1(division.name, product, true);
@@ -239,7 +239,7 @@ function doResearch(ns, division) {
 			// research other upgrades based on available funds and priority; see researchList
 			if (!ns.corporation.hasResearched(division.name, researchObject.name)) {
 				if (division.research > (researchObject.prio * ns.corporation.getResearchCost(division.name, researchObject.name))) {
-					ns.print("Research " + division.name + " -> " + researchObject.name);
+					ns.print(division.name + " Research " + researchObject.name);
 					ns.corporation.research(division.name, researchObject.name);
 				}
 			}
@@ -259,7 +259,7 @@ function newProduct(ns, division) {
 			productNumbers.push(product.charAt(product.length - 1));
 			// initial sell value if nothing is defined yet is 0
 			if (ns.corporation.getProduct(division.name, product).sCost == 0) {
-				ns.print("Start selling product " + product);
+				ns.print(division.name + " Start selling product " + product);
 				ns.corporation.sellProduct(division.name, "Sector-12", product, "MAX", "MP", true);
 				if (ns.corporation.hasResearched(division.name, "Market-TA.II")) {
 					ns.corporation.setProductMarketTA1(division.name, product, true);
@@ -280,15 +280,18 @@ function newProduct(ns, division) {
 
 	if (productNumbers.length > numProducts) {
 		// discontinue the oldest product if over max amount of products
-		ns.print("Discontinue product " + division.products[0]);
+		ns.print(division.name + " Discontinue product " + division.products[0]);
 		ns.corporation.discontinueProduct(division.name, division.products[0]);
 	}
 
 	// get the product number of the latest product and increase it by 1 for the mext product. Product names must be unique. 
-	var newProductNumber = parseInt(productNumbers[productNumbers.length - 1]) + 1;
-	// cap product numbers to one digit and restart at 0 if > 9.
-	if (newProductNumber > 9) {
-		newProductNumber = 0;
+	var newProductNumber = 0;
+	if (productNumbers.length > 0){
+		newProductNumber = parseInt(productNumbers[productNumbers.length - 1]) + 1;
+		// cap product numbers to one digit and restart at 0 if > 9.
+		if (newProductNumber > 9) {
+			newProductNumber = 0;
+		}
 	}
 	const newProductName = "Product-" + newProductNumber;
 	var productInvest = 1e9;
@@ -381,7 +384,7 @@ const upgradeList = [
 
 const researchList = [
 	// lower priority value -> upgrade faster
-	{ prio: 4, name: "Overclock" },
+	{ prio: 10, name: "Overclock" },
 	{ prio: 10, name: "uPgrade: Fulcrum" },
 	{ prio: 3, name: "uPgrade: Capacity.I" },
 	{ prio: 4, name: "uPgrade: Capacity.II" },
