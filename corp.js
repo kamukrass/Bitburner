@@ -249,7 +249,7 @@ function doResearch(ns, division) {
 
 function newProduct(ns, division) {
 	//ns.print("Products: " + division.products);
-	var productNumbers = [];
+	var productNumbers = [0];
 	for (var product of division.products) {
 		if (ns.corporation.getProduct(division.name, product).developmentProgress < 100) {
 			ns.print(division.name + " Product development progress: " + ns.corporation.getProduct(division.name, product).developmentProgress.toFixed(1) + "%");
