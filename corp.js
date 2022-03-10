@@ -24,7 +24,7 @@ export async function main(ns) {
 			doResearch(ns, division);
 		}
 		if (corp.divisions.length < 2 && corp.numShares == corp.totalShares) {
-			if (corp.divisions[0].products.length > 3) {
+			if (corp.divisions[0].products.length > 2) {
 				await trickInvest(ns, corp.divisions[0]);
 			}
 		}
@@ -278,7 +278,7 @@ function newProduct(ns, division) {
 		}
 	}
 
-	if (productNumbers.length > numProducts) {
+	if (productNumbers.length >= numProducts) {
 		// discontinue the oldest product if over max amount of products
 		ns.print(division.name + " Discontinue product " + division.products[0]);
 		ns.corporation.discontinueProduct(division.name, division.products[0]);
@@ -286,7 +286,7 @@ function newProduct(ns, division) {
 
 	// get the product number of the latest product and increase it by 1 for the mext product. Product names must be unique. 
 	var newProductNumber = 0;
-	if (productNumbers.length > 0){
+	if (productNumbers.length > 0) {
 		newProductNumber = parseInt(productNumbers[productNumbers.length - 1]) + 1;
 		// cap product numbers to one digit and restart at 0 if > 9.
 		if (newProductNumber > 9) {
@@ -317,7 +317,7 @@ async function initCities(ns, division, productCity = "Sector-12") {
 			ns.corporation.purchaseWarehouse(division.name, city);
 		}
 
-		ns.corporation.setSmartSupply(division.name, city, true);
+		//ns.corporation.setSmartSupply(division.name, city, true); // does not work anymore, bug?
 
 		if (city != productCity) {
 			// setup employees
@@ -353,7 +353,7 @@ async function initCities(ns, division, productCity = "Sector-12") {
 
 async function initialCorpUpgrade(ns) {
 	ns.print("unlock upgrades");
-	ns.corporation.unlockUpgrade("Smart Supply");	
+	ns.corporation.unlockUpgrade("Smart Supply");
 	ns.corporation.levelUpgrade("Smart Storage");
 	ns.corporation.levelUpgrade("Smart Storage");
 	ns.corporation.levelUpgrade("Smart Storage");
