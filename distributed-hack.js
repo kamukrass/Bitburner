@@ -698,6 +698,7 @@ async function scanAndNuke(ns) {
     scanAll(ns, "home", servers);
     var accessibleServers = new Set();
     for (let server of servers) {
+        if (server.startsWith("hacknet-node")) { continue; } // for BitNode 9 to permit hacking on the Hacknet Servers
         if (await ns.hasRootAccess(server)) {
             accessibleServers.add(server)
         } else {
