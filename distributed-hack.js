@@ -272,7 +272,7 @@ function manageAndHack(ns, freeRams, servers, targets, growStocks, hackStocks) {
             // multiply the initial grow ratio by the expected new grow ratio needed after hack
             overallGrowRatio = initialGrowRatio * hackReGrowRatio;
 
-            // compensate reduced grow effect in HGW after H due to security increase
+            // compensate reduced grow effect in WGH after H due to security increase
             overallGrowRatio *= (sec + addedHackSecurity) / sec;
 
             // Considering 0 cores on all serers. 
@@ -354,7 +354,7 @@ function manageAndHack(ns, freeRams, servers, targets, growStocks, hackStocks) {
                         // if we ran a partial weak/grow before and could do a full one now, reset partial attack
                         partialWeakGrow = null;
                     }
-                    //ns.print("INFO " + maxPercentage.toFixed(1) + " HGW " + target + " " + weakThreads + " | " + growThreads + " | " + hackThreads);
+                    //ns.print("INFO " + maxPercentage.toFixed(1) + " WGH " + target + " " + weakThreads + " | " + growThreads + " | " + hackThreads);
 
                 }
                 else { //hackthreads == 0
@@ -429,7 +429,7 @@ function manageAndHack(ns, freeRams, servers, targets, growStocks, hackStocks) {
                 }
                 // increment parallel attacks via for loop
             }
-            //ns.print("INFO " + parallelAttacks + "   HGW " + target + " " + weakThreads + " | " + growThreads + " | " + hackThreads);
+            //ns.print("INFO " + parallelAttacks + "   WGH " + target + " " + weakThreads + " | " + growThreads + " | " + hackThreads);
         }
 
         // re-calculate overall RAM need after scaling full attacs down or up
@@ -482,10 +482,10 @@ function manageAndHack(ns, freeRams, servers, targets, growStocks, hackStocks) {
         profitsm.set(target, profitM);
 
         if (parallelAttacks <= 1) {
-            ns.print("INFO " + maxPercentage.toFixed(1) + " HGW " + target + " " + weakThreads + " | " + growThreads + " | " + hackThreads + " | $/t/s " + profitM.toFixed(2));
+            ns.print("INFO " + maxPercentage.toFixed(1) + " WGH " + target + " " + weakThreads + " | " + growThreads + " | " + hackThreads + " | $/t/s " + profitM.toFixed(2));
         }
         else {
-            ns.print("INFO " + parallelAttacks + "   HGW " + target + " " + weakThreads + " | " + growThreads + " | " + hackThreads + " | $/t/s " + profitM.toFixed(2));
+            ns.print("INFO " + parallelAttacks + "   WGH " + target + " " + weakThreads + " | " + growThreads + " | " + hackThreads + " | $/t/s " + profitM.toFixed(2));
         }
 
         var growStock = growStocks.has(target);
@@ -698,6 +698,7 @@ async function scanAndNuke(ns) {
     scanAll(ns, "home", servers);
     var accessibleServers = new Set();
     for (let server of servers) {
+        if (server.startsWith("hacknet-node")) { continue; } // for BitNode 9 to permit hacking on the Hacknet Servers
         if (await ns.hasRootAccess(server)) {
             accessibleServers.add(server)
         } else {
@@ -770,37 +771,37 @@ Design goals
 
     Adapt to any situation automatically (early - late game)
 
-HGW attack patterns
+WGH attack patterns
 
-Baseline is one HGW pattern: (H)ack, Re-(G)row the money hacked and (W)eaken the security added. For a detailed description see Bitburner Hacking Algorithms. Anticipate the amount of grow and weaken needed for your hack beforehand. Deploy all three in parallel in specialized scripts on servers. Attack a server with min security and max money (weaken + grow initially).
+Baseline is one WGH pattern: (H)ack, Re-(G)row the money hacked and (W)eaken the security added. For a detailed description see Bitburner Hacking Algorithms. Anticipate the amount of grow and weaken needed for your hack beforehand. Deploy all three in parallel in specialized scripts on servers. Attack a server with min security and max money (weaken + grow initially).
 
-The HGW pattern has one variable for tuning: The percentage of money hacked. Re-growth need does not scale linearly with hack: Twice the amount of hack threads requires more than twice the amount of grow threads. Thus it is more RAM efficient to hack for small percentages of money only; bigger attacks are less RAM efficient.
+The WGH pattern has one variable for tuning: The percentage of money hacked. Re-growth need does not scale linearly with hack: Twice the amount of hack threads requires more than twice the amount of grow threads. Thus it is more RAM efficient to hack for small percentages of money only; bigger attacks are less RAM efficient.
 
-The basic HGW attack pattern can be scaled in two ways based on the amount of free RAM available:
+The basic WGH attack pattern can be scaled in two ways based on the amount of free RAM available:
 
-    Adjust the percentage of money to hack per HGW
+    Adjust the percentage of money to hack per WGH
 
     Attack multiple servers in parallel
 
-So early game, the optimal strategy is to continuously attack all possible servers in parallel with almost all available RAM using the HGW pattern with a low percentage of money hacked. If not enough RAM available for the intended percentage of money to hack, go for the biggest percentage possible.
+So early game, the optimal strategy is to continuously attack all possible servers in parallel with almost all available RAM using the WGH pattern with a low percentage of money hacked. If not enough RAM available for the intended percentage of money to hack, go for the biggest percentage possible.
 
-Also note that hack threads finish way earlier than grow or weak threads. That means RAM which becomes available after hack finishes, while grow and weak are still running from one HGW pattern: That RAM can be used immediately for something else. Example:
+Also note that hack threads finish way earlier than grow or weak threads. That means RAM which becomes available after hack finishes, while grow and weak are still running from one WGH pattern: That RAM can be used immediately for something else. Example:
 
-    Start "HGW" attack on server n00dles.
+    Start "WGH" attack on server n00dles.
 
-    "H" finishes. Use that free RAM from "H" for HGW attack on server foodnstuff.
+    "H" finishes. Use that free RAM from "H" for WGH attack on server foodnstuff.
 
     "GW" from noodles finish.
 
-HGW batch attack patterns
+WGH batch attack patterns
 
-At some point in time there is enough RAM available to fully hack all servers perfectly for 99.9% of their money continuously. More RAM cannot be put to use. Now comes the next mechanic and variable for tuning into play: Batch HGW attacks. HGW batch attacks are timed so that H, G + W all finish within a short amount of time by delaying the start of H and G (W always takes longest). Using normal HGW attacks, you can attack once during the time W runs (often: minutes). With batch attacks which are timed to 1 second or less, you can attack one server once every second! (over-simplified [technical details], see later).
+At some point in time there is enough RAM available to fully hack all servers perfectly for 99.9% of their money continuously. More RAM cannot be put to use. Now comes the next mechanic and variable for tuning into play: Batch WGH attacks. WGH batch attacks are timed so that H, G + W all finish within a short amount of time by delaying the start of H and G (W always takes longest). Using normal WGH attacks, you can attack once during the time W runs (often: minutes). With batch attacks which are timed to 1 second or less, you can attack one server once every second! (over-simplified [technical details], see later).
 
-Batch attacks are extremely powerful, why not use them always? Remember that regular HGW attacks free up RAM from finished H attacks that can be used already while the "GW" attack continues. Especially early-game, the majority of threads in an HGW pattern are hack threads (late game: grow). So while batch attacks can use up to 100% RAM, many threads will just wait for some time before they start - while blocking the RAM. So the RAM is not efficiently used (for just waiting).
+Batch attacks are extremely powerful, why not use them always? Remember that regular WGH attacks free up RAM from finished H attacks that can be used already while the "GW" attack continues. Especially early-game, the majority of threads in an WGH pattern are hack threads (late game: grow). So while batch attacks can use up to 100% RAM, many threads will just wait for some time before they start - while blocking the RAM. So the RAM is not efficiently used (for just waiting).
 
-Thus regular HGW attacks are optimal early-game until they cannot use more RAM anymore. Then batch attacks become the optimal strategy for utilizing more RAM.
+Thus regular WGH attacks are optimal early-game until they cannot use more RAM anymore. Then batch attacks become the optimal strategy for utilizing more RAM.
 
-The limit for batch attacks comes with the [technical details] mentioned in the over-simplification above: The targeted server needs to be at min sec when threads are started. So we cannot start any new attacks while running attacks are hitting the target. Example: An HGW execution time takes 10 seconds. We chain 9 attacks in parallel each with 1 second delay from the previous one. Then the 9 attacks are hitting for 10 seconds and during that time we cannot guarantee that the server has min security or max money. We need to wait until the running attack batch is finished before starting the next batch.
+The limit for batch attacks comes with the [technical details] mentioned in the over-simplification above: The targeted server needs to be at min sec when threads are started. So we cannot start any new attacks while running attacks are hitting the target. Example: An WGH execution time takes 10 seconds. We chain 9 attacks in parallel each with 1 second delay from the previous one. Then the 9 attacks are hitting for 10 seconds and during that time we cannot guarantee that the server has min security or max money. We need to wait until the running attack batch is finished before starting the next batch.
 
 So batch attacks can scale up to a certain extent when run against all servers at maximum potential. Then, more RAM cannot be used anymore. At this point in time money income  will most likely be absurdly too much to spend. However the game might not be finished just with money. Another benefit of hacking is experience gain. So at later stages, experience gain can be increased by just spamming useless W attacks.
 
@@ -811,7 +812,7 @@ Potential weaknesses
 
     Depending on how big the impact of "best" vs "worst" servers to hack is, it might actually be more "effective" to "inefficiently" hack the "best" server than to "efficiently" hack all servers. Or in other words, batch attacking a high value server might be the better approach than single-attacking multiple servers.
 
-    This approach utilizes resources to initially weaken and grow all servers. So the money income starts slow early game while initializing servers without hacking them. To limit resources spent on initializing many servers in parallel and prioritize resources on hacking few servers (HGW), RAM utilization is sometimes not optimized early game on purpose. Approaches with faster money income ramp-up time can enable buying more servers faster for more RAM.
+    This approach utilizes resources to initially weaken and grow all servers. So the money income starts slow early game while initializing servers without hacking them. To limit resources spent on initializing many servers in parallel and prioritize resources on hacking few servers (WGH), RAM utilization is sometimes not optimized early game on purpose. Approaches with faster money income ramp-up time can enable buying more servers faster for more RAM.
 
     The dynamic situation analysis for continuously choosing and tuning the strategy is not too highly sophisticated. Tailoring an attack strategy for a certain situation and time interval can certainly beat the situation analysis here
 
@@ -821,9 +822,9 @@ Summary
 
 The optimal strategy depends on and changes with the situation.
 
-    Early game: Regular HGW attacks, scale with money hacked & multiple targets
+    Early game: Regular WGH attacks, scale with money hacked & multiple targets
 
-    Mid game: Switch from HGW to Batch attacks, scale with batch size & multiple targets
+    Mid game: Switch from WGH to Batch attacks, scale with batch size & multiple targets
 
     Late game: Use free RAM for spamming W to gain exp
 */
