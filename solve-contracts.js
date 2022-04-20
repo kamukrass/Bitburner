@@ -76,6 +76,8 @@ function solve(type, data, server, contract, ns) {
         case "Sanitize Parentheses in Expression":
             solution = removeInvalidParenthesis(data);
             break;
+        default:
+            return false;
     }
     return (solution != "") ? ns.codingcontract.attempt(solution, contract, server, [true]) : "";
 }
@@ -263,11 +265,11 @@ function solverWaysToExpress(arrayData) {
 // Array Jumping Game
 
 function solverArrayJumpingGame(arrayData) {
-    let arrayJump = [1];
- 
+    let arrayJump = [0];
+
     for (let n = 0; n < arrayData.length; n++) {
-        if (arrayJump[n]) {
-            for (let p = n; p <= Math.min(n + arrayData[n], arrayData.length-1); p++) {
+        if (arrayJump[n] || !n) {
+            for (let p = n; p <= Math.min(n + arrayData[n], arrayData.length - 1); p++) {
                 arrayJump[p] = 1;
             }
         }
