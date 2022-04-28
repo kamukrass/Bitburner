@@ -1,9 +1,15 @@
 /** @param {NS} ns **/
 export async function main(ns) {
+	ns.tail();
 	ns.disableLog("disableLog"); ns.disableLog("sleep");
 
-	if (!ns.getPlayer().hasCorporation) {
-		ns.corporation.createCorporation("MyCorp");
+	while (!ns.getPlayer().hasCorporation) {
+		if (ns.getServerMoneyAvailable("home") > 150000000000) {
+			ns.corporation.createCorporation("MyCorp");
+		} else {
+			ns.print("Not enough money to start a corporation, waiting until $150,000,000,000");
+			await ns.sleep(60000);
+		}
 	}
 	var corp = ns.corporation.getCorporation();
 	if (corp.divisions.length < 1) {
@@ -17,10 +23,13 @@ export async function main(ns) {
 	while (true) {
 		corp = ns.corporation.getCorporation();
 		for (const division of corp.divisions.reverse()) {
+			expandCities(ns, division);
 			upgradeWarehouses(ns, division);
 			upgradeCorp(ns);
 			await hireEmployees(ns, division);
-			newProduct(ns, division);
+			if (division.type === "Tobacco") {
+				newProduct(ns, division);
+			}
 			doResearch(ns, division);
 		}
 		if (corp.divisions.length < 2 && corp.numShares == corp.totalShares) {
@@ -84,8 +93,36 @@ async function hireEmployees(ns, division, productCity = "Sector-12") {
 	}
 }
 
+function expandCities(ns, division) {
+	for (const city of cities) {
+		// check this city has a warehouse
+		if (!division.cities.includes(city) && ns.corporation.getExpandCityCost(division.name, city) < ns.corporation.getCorporation().funds) {
+			ns.print(division.name + " Expanding to city " + city);
+			ns.corporation.expandCity(division.name, city);
+		} else {
+			continue;
+		}
+	}
+}
+
 function upgradeWarehouses(ns, division) {
 	for (const city of cities) {
+		// check this city has been expanded in to
+		if (!division.cities.includes(city)) {
+			continue;
+		}
+		
+		// check this city has a warehouse and purchase if possible
+		if (!ns.corporation.hasWarehouse(division.name, city)) {
+			if (ns.corporation.getPurchaseWarehouseCost() < ns.corporation.getCorporation().funds) {
+				ns.print(division.name + " Purchasing a warehouse in " + city);
+				ns.corporation.purchaseWarehouse(division.name, city);
+			} else {
+				// no warehouse and can't afford one
+				continue;
+			}
+		}
+
 		// check if warehouses are near max capacity and upgrade if needed
 		var cityWarehouse = ns.corporation.getWarehouse(division.name, city);
 		if (cityWarehouse.sizeUsed > 0.9 * cityWarehouse.size) {
