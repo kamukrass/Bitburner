@@ -107,7 +107,7 @@ export async function main(ns) {
 
         for (var server of servers) {
             // transfer files to the servers
-            await ns.scp(files, "home", server);
+            await ns.scp(files, server, "home");
             // ToDo: Not efficient to loop through all servers always. Could be optimized to track which server was optimized and scp only once.
 
             // backdoor faction servers automatically requires singularity module

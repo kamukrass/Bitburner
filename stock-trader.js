@@ -34,7 +34,7 @@ function tendStocks(ns) {
                 overallValue += (stock.cost + stock.profit);
             }
             else {
-                const salePrice = ns.stock.sell(stock.sym, stock.longShares);
+                const salePrice = ns.stock.sellStock(stock.sym, stock.longShares);
                 const saleTotal = salePrice * stock.longShares;
                 const saleCost = stock.longPrice * stock.longShares;
                 const saleProfit = saleTotal - saleCost - 2 * commission;
@@ -69,7 +69,7 @@ function tendStocks(ns) {
             //ns.print(`INFO ${stock.summary}`);
             if (money > 500 * commission) {
                 const sharesToBuy = Math.min(stock.maxShares, Math.floor((money - commission) / stock.askPrice));
-                if (ns.stock.buy(stock.sym, sharesToBuy) > 0) {
+                if (ns.stock.buyStock(stock.sym, sharesToBuy) > 0) {
                     ns.print(`WARN ${stock.summary} LONG BOUGHT ${ns.nFormat(sharesToBuy, "$0.0a")}`);
                 }
             }
