@@ -11,12 +11,13 @@ export async function main(ns) {
 		ns.corporation.expandIndustry("Tobacco", "Tobacco");
 		corp = ns.corporation.getCorporation();
 		await initialCorpUpgrade(ns);
-		await initCities(ns, corp.divisions[0]);
+		await initCities(ns, ns.corporation.getDivision(division).name[0]);
 	}
-
+	
 	while (true) {
 		corp = ns.corporation.getCorporation();
-		for (const division of corp.divisions.reverse()) {
+		for (let division of corp.divisions.reverse()) {
+			division = ns.corporation.getDivision(division);
 			upgradeWarehouses(ns, division);
 			upgradeCorp(ns);
 			await hireEmployees(ns, division);
@@ -24,8 +25,8 @@ export async function main(ns) {
 			doResearch(ns, division);
 		}
 		if (corp.divisions.length < 2 && corp.numShares == corp.totalShares) {
-			if (corp.divisions[0].products.length > 2) {
-				await trickInvest(ns, corp.divisions[0]);
+			if (ns.corporation.getDivision(corp.divisions[0]).products.length > 2) {
+				await trickInvest(ns, ns.corporation.getDivision(corp.divisions[0]));
 			}
 		}
 		await ns.sleep(5000);
@@ -33,7 +34,7 @@ export async function main(ns) {
 }
 
 async function hireEmployees(ns, division, productCity = "Sector-12") {
-	var employees = ns.corporation.getOffice(division.name, productCity).employees.length;
+	var employees = ns.corporation.getOffice(division.name, productCity).employees;
 	while (ns.corporation.getCorporation().funds > (cities.length * ns.corporation.getOfficeSizeUpgradeCost(division.name, productCity, 3))) {
 		// upgrade all cities + 3 employees if sufficient funds
 		ns.print(division.name + " Upgrade office size");
@@ -47,7 +48,8 @@ async function hireEmployees(ns, division, productCity = "Sector-12") {
 	if (ns.corporation.getOffice(division.name, productCity).employees.length > employees) {
 		// set jobs after hiring people just in case we hire lots of people at once and setting jobs is slow
 		for (const city of cities) {
-			employees = ns.corporation.getOffice(division.name, city).employees.length;
+			employees = ns.corporation.getOffice(division.name, city).employees;
+			// ns.print(employees)
 			if (ns.corporation.hasResearched(division.name, "Market-TA.II")) {
 				// TODO: Simplify here. ProductCity config can always be used
 				if (city == productCity) {
@@ -203,7 +205,7 @@ async function trickInvest(ns, division, productCity = "Sector-12") {
 
 	// with gained money, expand to the most profitable division
 	ns.corporation.expandIndustry("Healthcare", "Healthcare");
-	await initCities(ns, ns.corporation.getCorporation().divisions[1]);
+	await initCities(ns, nns.corporation.getDivision(divisions[1]));
 }
 
 function doResearch(ns, division) {
